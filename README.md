@@ -27,7 +27,7 @@ npm run build      # type-check + production build
 
 ## Project structure
 
-```
+```text
 src/
   engine/
     simulation/     request traversal engine, network firewall (NACL/SG) checks
@@ -44,13 +44,7 @@ The engine (`src/engine/`) is plain TypeScript with no React dependency, so its 
 
 ## Contributing
 
-Contributions are welcome — this project is used as a teaching tool, so student contributions are especially encouraged. Before opening a pull request:
-
-1. `npm test` and `npm run build` must both pass.
-2. If you touch `src/engine/`, add or update a test in `test/engine.test.ts` covering the behavior.
-3. If you add a reference architecture, make sure its node placement is geometrically valid (the test suite checks every template's subnet placement automatically) and that its simulation actually succeeds (or fails on purpose, with a clear reason).
-
-Open an issue first for anything beyond a small fix, so the approach can be discussed before you put time into it.
+Contributions are welcome — this project is used as a teaching tool, so student contributions are especially encouraged. See [CONTRIBUTING.md](CONTRIBUTING.md) for the fork-and-PR workflow and what makes a good pull request.
 
 ## License
 

@@ -25,6 +25,23 @@ npm test          # run the engine test suite
 npm run build      # type-check + production build
 ```
 
+### Running with Docker
+
+This is a static single-page app with no backend, so it's served with nginx rather than a
+Node.js server at runtime - a multi-stage build compiles it once, then discards the whole
+Node/npm toolchain, leaving a small (~80MB) image with nothing to patch for Node/npm CVEs.
+
+```bash
+docker compose up --build   # then open http://localhost:8080
+```
+
+or without Compose:
+
+```bash
+docker build -t aws-resilience-simulator .
+docker run -p 8080:80 aws-resilience-simulator
+```
+
 ## Project structure
 
 ```text

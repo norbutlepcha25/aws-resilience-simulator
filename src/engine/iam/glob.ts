@@ -9,7 +9,7 @@ export function wildcardMatch(pattern: string, value: string): boolean {
     .map(ch => {
       if (ch === '*') return '.*';
       if (ch === '?') return '.';
-      return ch.replace(/[.+^${}()|[\]\\]/, '\\$&');
+      return ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
     })
     .join('');
 

@@ -8,7 +8,7 @@ import { SimulationControls } from './components/simulation/SimulationControls.t
 import { EventTimeline } from './components/simulation/EventTimeline.tsx';
 import { FailureControls } from './components/failure/FailureControls.tsx';
 import { AnalysisModal } from './components/analysis/AnalysisModal.tsx';
-import { ChallengeModal } from './components/challenges/ChallengeModal.tsx';
+import { LabsModal } from './components/labs/LabsModal.tsx';
 import { ExportModal } from './components/export/ExportModal.tsx';
 import { CostEstimatorModal } from './components/cost/CostEstimatorModal.tsx';
 import { NaclSideColumn } from './components/inspector/NaclSideColumn.tsx';
@@ -16,7 +16,7 @@ import { NaclSideColumn } from './components/inspector/NaclSideColumn.tsx';
 const AppContent: React.FC = () => {
   const { appMode, showNaclSideColumn, setShowNaclSideColumn } = useArchitecture();
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
-  const [isChallengesOpen, setIsChallengesOpen] = useState(false);
+  const [isLabsOpen, setIsLabsOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isCostOpen, setIsCostOpen] = useState(false);
 
@@ -25,7 +25,7 @@ const AppContent: React.FC = () => {
       {/* Top Application Header */}
       <AppHeader
         onOpenAnalysis={() => setIsAnalysisOpen(true)}
-        onOpenChallenges={() => setIsChallengesOpen(true)}
+        onOpenLabs={() => setIsLabsOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
         onOpenCost={() => setIsCostOpen(true)}
       />
@@ -64,9 +64,9 @@ const AppContent: React.FC = () => {
         onClose={() => setIsAnalysisOpen(false)}
       />
 
-      <ChallengeModal
-        isOpen={isChallengesOpen}
-        onClose={() => setIsChallengesOpen(false)}
+      <LabsModal
+        isOpen={isLabsOpen}
+        onClose={() => setIsLabsOpen(false)}
       />
 
       <ExportModal

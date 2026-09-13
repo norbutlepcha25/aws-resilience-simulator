@@ -7,7 +7,7 @@ import {
   Layers,
   ShieldAlert,
   BarChart3,
-  Trophy,
+  BookOpen,
   Download,
   FilePlus2,
   ImageDown,
@@ -18,14 +18,14 @@ import {
 
 interface AppHeaderProps {
   onOpenAnalysis: () => void;
-  onOpenChallenges: () => void;
+  onOpenLabs: () => void;
   onOpenExport: () => void;
   onOpenCost: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
   onOpenAnalysis,
-  onOpenChallenges,
+  onOpenLabs,
   onOpenExport,
   onOpenCost
 }) => {
@@ -138,11 +138,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </button>
 
         <button
-          onClick={onOpenChallenges}
+          onClick={onOpenLabs}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors"
         >
-          <Trophy className="w-3.5 h-3.5" />
-          <span>Challenges</span>
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Labs</span>
         </button>
       </nav>
 

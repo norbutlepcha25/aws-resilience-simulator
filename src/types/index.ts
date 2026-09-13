@@ -88,6 +88,16 @@ export interface ServiceNodeData extends Record<string, unknown> {
   trafficLoad?: number;
   failureReason?: string;
   customConfig?: Record<string, any>;
+  /** Optional IAM role attached to this resource (e.g. an EC2 instance profile or a Lambda
+   *  execution role) - drives `engine/validation/iam.ts`'s real trust-policy/permission checks via
+   *  the standalone IAM engine (`engine/iam/`) instead of a shallow allow-list string match. A
+   *  resource with no role attached still gets a coarser "no IAM role at all" validation check. */
+  iamRole?: {
+    id: string;
+    trustPolicy?: import('../engine/iam/types.ts').Policy;
+    identityPolicies?: import('../engine/iam/types.ts').Policy[];
+    permissionsBoundary?: import('../engine/iam/types.ts').Policy;
+  };
 }
 
 export type FlowStatus = 'active' | 'completed' | 'pending' | 'failed' | 'dimmed' | 'idle';
@@ -99,6 +109,11 @@ export interface ConnectionData extends Record<string, unknown> {
   interactionType: 'synchronous' | 'asynchronous' | 'cached' | 'event';
   isCriticalDependency: boolean;
   timeoutMs: number;
+  /** A dependency call is executed as a child operation and then returns to the parent
+   * request. It is not selected as the next forwarding hop. */
+  traversal?: 'forward' | 'dependency';
+  dependencyRequired?: boolean;
+  action?: string;
   animated?: boolean;
   isFailing?: boolean;
   isSimulating?: boolean;
@@ -110,6 +125,29 @@ export interface ConnectionData extends Record<string, unknown> {
   flowLatency?: number;
   flowExplanation?: string;
   flowStatusCode?: number;
+  // Signal Flow properties
+  signalType?: 'inbound_request' | 'outbound_response';
+  hasMissingReturnBlock?: boolean;
+  signalLabel?: string;
+  curveOffset?: number;
+}
+
+export interface NaclRule {
+  ruleNumber: number;
+  type: string;
+  protocol: string;
+  portRange: string;
+  cidr: string;
+  action: 'ALLOW' | 'DENY';
+  isStatelessReturn?: boolean;
+  isMissingReturn?: boolean;
+}
+
+export interface SubnetNaclConfig {
+  naclName: string;
+  inboundRules: NaclRule[];
+  outboundRules: NaclRule[];
+  isCustom: boolean;
 }
 
 export interface SimulationStep {
@@ -127,11 +165,14 @@ export interface SimulationStep {
   targetHealth: NodeHealth;
   latencyMs: number;
   details?: {
+    decision?: import('../engine/trace/types.ts').TraceEntry;
     targetsEvaluated?: { id: string; name: string; health: NodeHealth; selected: boolean }[];
     cacheHit?: boolean;
     statusCode?: number;
     failureReason?: string;
     recoveryApplied?: string;
+    dependencyCall?: boolean;
+    returnsToNodeId?: string;
   };
 }
 
@@ -154,6 +195,11 @@ export interface SimulationResult {
   summary: string;
   bottlenecksDetected: string[];
   cascadeOccurred: boolean;
+  /** The ordered node ids this specific request actually traversed (start node first) - lets a
+   *  caller (e.g. the Trace Engine, `engine/trace/`) reconstruct the real hop-by-hop path without
+   *  re-deriving traversal/next-hop-selection logic that already lives in `runSimulation`. Empty
+   *  when the scenario had no resolvable start node. */
+  path: string[];
 }
 
 export interface ScoreDetail {
@@ -203,6 +249,18 @@ export interface ArchitectureAnalysis {
   summary: string;
 }
 
+/** Extra evaluation context beyond the legacy `(nodes, edges, analysis)` triple - lets a challenge
+ *  evaluate connectivity (`simulationResult`), configuration validity (`validationFindings`), and
+ *  IAM/security/resilience risk (`architecturalFindings`, which includes the `iam`, `public_exposure`,
+ *  `redundancy`, `dependency_concentration`, and `blast_radius` subcategories) without threading
+ *  four more positional parameters through every existing challenge definition. Optional and
+ *  additive: a challenge written against the old 3-argument signature still works unchanged. */
+export interface ChallengeEvaluationContext {
+  simulationResult: SimulationResult | null;
+  validationFindings: import('../engine/findings.ts').Finding[];
+  architecturalFindings: import('../engine/findings.ts').Finding[];
+}
+
 export interface StudentChallenge {
   id: string;
   title: string;
@@ -210,7 +268,12 @@ export interface StudentChallenge {
   scenario: string;
   trafficScale: string;
   requirements: string[];
-  evaluationCheck: (nodes: any[], edges: any[], analysis: ArchitectureAnalysis) => {
+  evaluationCheck: (
+    nodes: any[],
+    edges: any[],
+    analysis: ArchitectureAnalysis,
+    context?: ChallengeEvaluationContext
+  ) => {
     passed: boolean;
     feedback: string[];
     score: number;
@@ -218,4 +281,4 @@ export interface StudentChallenge {
   initialTemplateId?: string;
 }
 
-export type AppMode = 'design' | 'simulate' | 'failure' | 'analyze' | 'compare' | 'challenges' | 'teaching';
+export type AppMode = 'design' | 'simulate' | 'failure' | 'analyze' | 'compare' | 'challenges';

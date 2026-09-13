@@ -1,0 +1,1 @@
+Capability registry query: only 9 of 327 services reach FULL_BEHAVIOR (EC2, Lambda, Fargate, S3, DynamoDB, RDS, CloudFront, ALB, NLB); 297 (91%) have zero earned differentiation beyond the universal config/validation baseline.

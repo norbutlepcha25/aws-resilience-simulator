@@ -14,7 +14,7 @@ export const STUDENT_CHALLENGES: StudentChallenge[] = [
       'Achieve 0 detected Critical Single Points of Failure in the analysis'
     ],
     initialTemplateId: 'basic-spof-app',
-    evaluationCheck: (nodes, _edges, analysis) => {
+    evaluationCheck: (nodes, _edges, analysis, context) => {
       const feedback: string[] = [];
       let passed = true;
 
@@ -61,6 +61,26 @@ export const STUDENT_CHALLENGES: StudentChallenge[] = [
         (hasRedundantDb ? 25 : 0) +
         (criticalSpofs.length === 0 ? 25 : 0)
       );
+
+      // Bonus, informational only (never gates pass/fail or score - this challenge's stated
+      // requirements are about redundancy, not IAM/security/connectivity) - demonstrates that a
+      // challenge CAN evaluate architecture configuration validity, IAM, security, and connectivity
+      // via the richer evaluation context, not just the legacy SPOF/bottleneck/security scores.
+      if (context) {
+        const iamIssues = context.validationFindings.filter(f => f.subcategory === 'iam');
+        const exposureIssues = context.architecturalFindings.filter(f => f.subcategory === 'public_exposure');
+        if (iamIssues.length > 0) {
+          feedback.push(`Note: ${iamIssues.length} IAM configuration issue(s) detected (not required for this challenge, but worth fixing).`);
+        }
+        if (exposureIssues.length > 0) {
+          feedback.push(`Note: ${exposureIssues.length} public-exposure risk(s) detected (not required for this challenge, but worth fixing).`);
+        }
+        if (context.simulationResult) {
+          feedback.push(context.simulationResult.success
+            ? 'Connectivity check: your last Send Request simulation succeeded end-to-end.'
+            : `Connectivity check: your last Send Request simulation failed (HTTP ${context.simulationResult.statusCode}) - run a fresh request after making changes.`);
+        }
+      }
 
       return { passed, feedback, score };
     }

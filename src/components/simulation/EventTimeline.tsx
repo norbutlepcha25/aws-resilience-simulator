@@ -77,8 +77,8 @@ export const EventTimeline: React.FC = () => {
               onMouseLeave={() => setHoveredStepIndex(null)}
               className={`min-w-[250px] max-w-[280px] flex-shrink-0 p-2.5 rounded-xl border transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-white border-blue-600 ring-2 ring-blue-500/20 shadow-sm'
-                  : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-xs'
+                  ? 'bg-white border-circuit-600 ring-2 ring-circuit-500/20 shadow-sm'
+                  : 'bg-white border-slate-200 hover:border-circuit-300 hover:shadow-xs'
               }`}
             >
               {/* Event Top Bar */}

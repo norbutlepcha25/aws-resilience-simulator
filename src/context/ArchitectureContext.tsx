@@ -20,15 +20,21 @@ import {
   AvailabilityZone,
   ProtocolType,
   NodeHealth
-} from '../types';
-import { SERVICE_MAP } from '../data/serviceCatalog';
-import { REFERENCE_ARCHITECTURES } from '../data/referenceArchitectures';
-import { STUDENT_CHALLENGES } from '../data/studentChallenges';
-import { runSimulation } from '../engine/simulation/requestSimulator';
-import { analyzeArchitecture } from '../engine/analysis/rulesEngine';
-import { deriveSubnetForNode, findContainingVpc, getBoundaryRect } from '../engine/layout/containment';
-import { allocateSubnetCidrs } from '../engine/layout/cidrAllocator';
-import { calculateArchitectureCost, ArchitectureCostReport } from '../engine/cost/costCalculator';
+} from '../types/index.ts';
+import { SERVICE_MAP } from '../data/serviceCatalog.ts';
+import { REFERENCE_ARCHITECTURES } from '../data/referenceArchitectures.ts';
+import { STUDENT_CHALLENGES } from '../data/studentChallenges.ts';
+import { runLiveSimulation as runSimulation, traceFromSimulation } from '../engine/simulation/liveSimulation.ts';
+import { analyzeArchitecture } from '../engine/analysis/rulesEngine.ts';
+import { deriveSubnetForNode, findContainingVpc, getBoundaryRect, calculateBoundaryZIndex } from '../engine/layout/containment.ts';
+import { allocateSubnetCidrs } from '../engine/layout/cidrAllocator.ts';
+import { calculateArchitectureCost, ArchitectureCostReport } from '../engine/cost/costCalculator.ts';
+import { createFailure, computeEffectiveArchitectureState } from '../engine/failure/index.ts';
+import type { Failure, FailureInput, FailureImpactAnalysis } from '../engine/failure/index.ts';
+import { validateArchitecture } from '../engine/validation/index.ts';
+import type { Finding } from '../engine/validation/index.ts';
+import { analyzeArchitectureFindings } from '../engine/analysis/architecturalFindings.ts';
+import type { RequestTrace } from '../engine/trace/index.ts';
 
 interface ArchitectureContextType {
   nodes: Node<ServiceNodeData>[];
@@ -68,10 +74,26 @@ interface ArchitectureContextType {
   failAvailabilityZone: (az: AvailabilityZone) => void;
   restoreAllNodes: () => void;
 
+  // Failure Simulation Engine (Phase 9): structured, propagation-aware failures on top of the
+  // manual health mutators above. `effectiveNodes`/`effectiveEdges` are `nodes`/`edges` with every
+  // active failure's real (dependency-aware) consequences merged in - what `runScenario` actually
+  // simulates against.
+  activeFailures: Failure[];
+  injectFailure: (input: FailureInput) => string;
+  resolveFailure: (failureId: string) => void;
+  clearAllFailures: () => void;
+  effectiveNodes: Node<ServiceNodeData>[];
+  effectiveEdges: Edge<ConnectionData>[];
+  failureImpacts: FailureImpactAnalysis[];
+
   // Simulation controls
   scenario: SimulationScenario;
   setScenario: React.Dispatch<React.SetStateAction<SimulationScenario>>;
   simulationResult: SimulationResult | null;
+  /** The explainable AWS decision trace for `simulationResult` - request path, decision points,
+   *  and the AWS rule/reason behind each one (engine/trace/). `null` when there's nothing to
+   *  explain yet. */
+  requestTrace: RequestTrace | null;
   activeStepIndex: number | null;
   setActiveStepIndex: (index: number | null) => void;
   runScenario: () => void;
@@ -94,6 +116,11 @@ interface ArchitectureContextType {
   analysis: ArchitectureAnalysis;
   recalculateAnalysis: () => void;
 
+  // Phase 10: Configuration & Design Validation - see engine/findings.ts for why these are two
+  // separate lists rather than one.
+  validationFindings: Finding[];
+  architecturalFindings: Finding[];
+
   // Challenges & Templates
   loadTemplate: (templateId: string) => void;
   activeChallenge: StudentChallenge | null;
@@ -101,9 +128,10 @@ interface ArchitectureContextType {
   challengeResult: { passed: boolean; feedback: string[]; score: number } | null;
   runChallengeTest: () => void;
 
-  // Teaching / Projector Mode
-  isTeachingMode: boolean;
-  setIsTeachingMode: (val: boolean) => void;
+  // NACL Side Column & Inspection
+  showNaclSideColumn: boolean;
+  setShowNaclSideColumn: (val: boolean) => void;
+  hasCustomNacl: boolean;
 
   // AWS Cost & Billing Simulator
   costReport: ArchitectureCostReport;
@@ -111,9 +139,70 @@ interface ArchitectureContextType {
 
 const ArchitectureContext = createContext<ArchitectureContextType | null>(null);
 
+export const DEFAULT_STARTER_NODES: Node<any>[] = [
+  // 1. Boundary: VPC (10.0.0.0/16)
+  {
+    id: 'box-vpc',
+    type: 'boundaryNode',
+    position: { x: 60, y: 40 },
+    data: {
+      label: 'VPC',
+      boundaryType: 'vpc',
+      width: 780,
+      height: 480,
+      cidr: '10.0.0.0/16'
+    },
+    style: { width: 780, height: 480 },
+    draggable: true,
+    selectable: true,
+    zIndex: -2
+  },
+
+  // 2. Boundary: Public Subnet
+  {
+    id: 'box-public-subnet',
+    type: 'boundaryNode',
+    position: { x: 90, y: 80 },
+    data: {
+      label: 'Public subnet',
+      boundaryType: 'public_subnet',
+      width: 720,
+      height: 195
+    },
+    style: { width: 720, height: 195 },
+    draggable: true,
+    selectable: true,
+    zIndex: 0
+  },
+
+  // 3. Boundary: Private Subnet
+  {
+    id: 'box-private-subnet',
+    type: 'boundaryNode',
+    position: { x: 90, y: 300 },
+    data: {
+      label: 'Private subnet',
+      boundaryType: 'private_subnet',
+      width: 720,
+      height: 195
+    },
+    style: { width: 720, height: 195 },
+    draggable: true,
+    selectable: true,
+    zIndex: 0
+  }
+];
+
+export const createStarterNodes = (): Node<any>[] =>
+  DEFAULT_STARTER_NODES.map(n => ({
+    ...n,
+    data: { ...n.data },
+    style: { ...n.style }
+  }));
+
 export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Start with a clean blank canvas for students to design and construct from scratch
-  const [nodes, setNodes, rawOnNodesChange] = useNodesState<Node<any>>([]);
+  // Start with default VPC and Public/Private subnets on the canvas
+  const [nodes, setNodes, rawOnNodesChange] = useNodesState<Node<any>>(createStarterNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<any>>([]);
 
   // Synchronize dynamic dimension changes (e.g. from NodeResizer) into node.data and node.style
@@ -222,29 +311,50 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
       })
     );
 
+    // Dynamically calculate containment-aware stacking z-index for every boundary node.
+    // Inner/enclosed boundaries receive higher z-index than their enclosing containers
+    // (e.g. VPC inside AZ gets higher z-index than AZ, and AZ gets higher z-index than Region).
+    const targetZIndexById = new Map<string, number>();
+    for (const b of boundaryNodes) {
+      if ((b.data as any)?.customZIndex) {
+        continue;
+      }
+      const targetZ = calculateBoundaryZIndex(b, boundaryNodes);
+      targetZIndexById.set(b.id, targetZ);
+    }
+
     let changed = false;
 
     const nextNodes = nodes.map(n => {
       const isServiceNode = n.type === 'serviceNode' || (n.type !== 'boundaryNode' && (n.data as any)?.serviceId);
       if (isServiceNode) {
         const derivedSubnet = deriveSubnetForNode(n, boundaryNodes);
-        if ((n.data as any)?.subnet === derivedSubnet) return n;
+        const needsZIndex = n.zIndex === undefined || n.zIndex < 10;
+        if ((n.data as any)?.subnet === derivedSubnet && !needsZIndex) return n;
         changed = true;
-        return { ...n, data: { ...n.data, subnet: derivedSubnet } };
+        return {
+          ...n,
+          ...(needsZIndex ? { zIndex: 10 } : {}),
+          data: { ...n.data, subnet: derivedSubnet }
+        };
       }
 
       if (cidrById.has(n.id)) {
         const alloc = cidrById.get(n.id)!;
-        if (
-          (n.data as any)?.cidr === (alloc.cidr ?? undefined) &&
-          (n.data as any)?.cidrError === (alloc.error ?? undefined) &&
-          (n.data as any)?.usableHosts === (alloc.usableHosts ?? undefined)
-        ) {
+        const targetZ = targetZIndexById.get(n.id);
+        const zChanged = targetZ !== undefined && n.zIndex !== targetZ;
+        const cidrChanged =
+          (n.data as any)?.cidr !== (alloc.cidr ?? undefined) ||
+          (n.data as any)?.cidrError !== (alloc.error ?? undefined) ||
+          (n.data as any)?.usableHosts !== (alloc.usableHosts ?? undefined);
+
+        if (!cidrChanged && !zChanged) {
           return n;
         }
         changed = true;
         return {
           ...n,
+          ...(zChanged ? { zIndex: targetZ } : {}),
           data: {
             ...n.data,
             cidr: alloc.cidr ?? undefined,
@@ -255,6 +365,14 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
             usableRange: alloc.usableRange
           }
         };
+      }
+
+      if (n.type === 'boundaryNode' && targetZIndexById.has(n.id)) {
+        const targetZ = targetZIndexById.get(n.id)!;
+        if (n.zIndex !== targetZ) {
+          changed = true;
+          return { ...n, zIndex: targetZ };
+        }
       }
 
       return n;
@@ -287,11 +405,31 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const [activeChallenge, setActiveChallenge] = useState<StudentChallenge | null>(null);
   const [challengeResult, setChallengeResult] = useState<{ passed: boolean; feedback: string[]; score: number } | null>(null);
-  const [isTeachingMode, setIsTeachingMode] = useState<boolean>(false);
+  const [showNaclSideColumn, setShowNaclSideColumn] = useState<boolean>(false);
+  // A new canvas selection opens its own inspector rather than retaining the NACL panel.
+  useEffect(() => { setShowNaclSideColumn(false); }, [selectedNodeId]);
+
+  const hasCustomNacl = useMemo(() => {
+    return nodes.some(n => Boolean((n.data as any)?.customNacl));
+  }, [nodes]);
 
   // Compute Analysis dynamically
   const analysis = useMemo(() => {
     return analyzeArchitecture(nodes, edges);
+  }, [nodes, edges]);
+
+  // Phase 10: three deliberately separate questions. `validationFindings` = is this legal, well-
+  // formed AWS config (CIDR/placement/routing/NACL/SG/IAM/dependency/service-config correctness) -
+  // independent of both whether a simulated request succeeds (`simulationResult`, above) and
+  // whether the design itself is good (`architecturalFindings`, below - SPOF/bottleneck/public
+  // exposure/redundancy/dependency concentration/blast radius). A configuration can score
+  // differently on all three at once - see engine/findings.ts.
+  const validationFindings = useMemo(() => {
+    return validateArchitecture(nodes, edges);
+  }, [nodes, edges]);
+
+  const architecturalFindings = useMemo(() => {
+    return analyzeArchitectureFindings(nodes, edges);
   }, [nodes, edges]);
 
   // Compute Architecture Bill dynamically
@@ -394,7 +532,8 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         replicas: options?.replicas || serviceDef.defaultConfig?.replicas || 1,
         multiAz: options?.multiAz !== undefined ? options.multiAz : (serviceDef.defaultConfig?.multiAz || false),
         ...options
-      }
+      },
+      zIndex: 10
     };
 
     setNodes((nds) => [...nds, newNode]);
@@ -410,8 +549,8 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const defs: Record<string, { label: string; width: number; height: number; zIndex: number }> = {
       region: { label: 'Region (us-east-1)', width: 980, height: 600, zIndex: -3 },
       vpc: { label: 'VPC', width: 880, height: 500, zIndex: -2 },
-      az: { label: 'Availability Zone', width: 360, height: 560, zIndex: -1 },
-      availability_zone: { label: 'Availability Zone', width: 360, height: 560, zIndex: -1 },
+      az: { label: 'Availability Zone', width: 360, height: 560, zIndex: -2 },
+      availability_zone: { label: 'Availability Zone', width: 360, height: 560, zIndex: -2 },
       public_subnet: { label: 'Public subnet', width: 320, height: 200, zIndex: 0 },
       private_subnet: { label: 'Private subnet', width: 320, height: 200, zIndex: 0 },
       security_group: { label: 'Security group', width: 700, height: 130, zIndex: 1 },
@@ -421,31 +560,42 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const config = defs[boundaryType] || { label: 'Boundary', width: 400, height: 300, zIndex: -1 };
     const count = nodes.filter(n => n.type === 'boundaryNode' && (n.data as any)?.boundaryType === boundaryType).length;
     const label = options?.label || (count > 0 ? `${config.label} #${count + 1}` : config.label);
+    const width = options?.width || config.width;
+    const height = options?.height || config.height;
+    const boundaryPos = position || { x: 100, y: 100 };
 
-    const newBoundary: Node<any> = {
+    const candidateBoundary: Node<any> = {
       id: `box-${boundaryType}-${Date.now()}`,
       type: 'boundaryNode',
-      position: position || { x: 100, y: 100 },
+      position: boundaryPos,
       data: {
         label,
         boundaryType,
-        width: options?.width || config.width,
-        height: options?.height || config.height,
+        width,
+        height,
         // A VPC needs an address block from the moment it exists, so subnets drawn inside it
         // have something to be carved from immediately, without the student having to open the
         // inspector first. Subnets themselves get no default - their CIDR is always derived.
         ...(boundaryType === 'vpc' ? { cidr: '10.0.0.0/16' } : {})
       },
       style: {
-        width: options?.width || config.width,
-        height: options?.height || config.height
+        width,
+        height
       },
       draggable: true,
-      selectable: true,
-      zIndex: config.zIndex
+      selectable: true
+    };
+
+    const existingBoundaryNodes = nodes.filter(n => n.type === 'boundaryNode');
+    const dynamicZ = calculateBoundaryZIndex(candidateBoundary, [...existingBoundaryNodes, candidateBoundary]);
+
+    const newBoundary: Node<any> = {
+      ...candidateBoundary,
+      zIndex: dynamicZ
     };
 
     setNodes(nds => [newBoundary, ...nds]);
+    setSelectedNodeId(newBoundary.id);
     return newBoundary.id;
   }, [nodes, setNodes]);
 
@@ -499,7 +649,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (node.id === id) {
           return {
             ...node,
-            zIndex: maxZ + 1
+            zIndex: maxZ + 1,
+            data: {
+              ...node.data,
+              customZIndex: true
+            }
           };
         }
         return node;
@@ -515,7 +669,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (node.id === id) {
           return {
             ...node,
-            zIndex: minZ - 1
+            zIndex: minZ - 1,
+            data: {
+              ...node.data,
+              customZIndex: true
+            }
           };
         }
         return node;
@@ -530,7 +688,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (node.id === id) {
           return {
             ...node,
-            zIndex: (node.zIndex ?? 0) + 1
+            zIndex: (node.zIndex ?? 0) + 1,
+            data: {
+              ...node.data,
+              customZIndex: true
+            }
           };
         }
         return node;
@@ -545,7 +707,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (node.id === id) {
           return {
             ...node,
-            zIndex: (node.zIndex ?? 0) - 1
+            zIndex: (node.zIndex ?? 0) - 1,
+            data: {
+              ...node.data,
+              customZIndex: true
+            }
           };
         }
         return node;
@@ -560,7 +726,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (node.id === id) {
           return {
             ...node,
-            zIndex
+            zIndex,
+            data: {
+              ...node.data,
+              customZIndex: true
+            }
           };
         }
         return node;
@@ -655,14 +825,16 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, [selectedNodeId, selectedEdgeId, setNodes, setEdges]);
 
-  // Clear canvas
+  // Clear / Reset canvas to baseline starter VPC and Public/Private subnets
   const clearCanvas = useCallback(() => {
-    setNodes([]);
+    setNodes(createStarterNodes());
     setEdges([]);
+    setActiveFailures([]);
     setSimulationResult(null);
     setActiveStepIndex(null);
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
+    setShowNaclSideColumn(false);
   }, [setNodes, setEdges]);
 
   // Toggle failure of a single node
@@ -727,10 +899,38 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
       }))
     );
+    setActiveFailures([]);
     setSimulationResult(null);
     setActiveStepIndex(null);
     setIsPlaying(false);
   }, [setNodes, setEdges]);
+
+  // Failure Simulation Engine: structured failures (the 14 failure types - NACL/SG/IAM/route/DNS/
+  // network/NAT denial, AZ/instance/service/database/dependency/config unavailability, ALB target
+  // failure) injected on top of the manual health mutators above. `effectiveNodes`/`effectiveEdges`
+  // recompute whenever the canvas or the active failure set changes, merging each failure's real
+  // propagated consequence (see engine/failure/propagation.ts) rather than a blanket downstream fail.
+  const [activeFailures, setActiveFailures] = useState<Failure[]>([]);
+
+  const injectFailure = useCallback((input: FailureInput): string => {
+    const failure = createFailure(input);
+    setActiveFailures((prev) => [...prev, failure]);
+    return failure.id;
+  }, []);
+
+  const resolveFailure = useCallback((failureId: string) => {
+    setActiveFailures((prev) => prev.filter((f) => f.id !== failureId));
+  }, []);
+
+  const clearAllFailures = useCallback(() => {
+    setActiveFailures([]);
+  }, []);
+
+  const effectiveArchitectureState = useMemo(
+    () => computeEffectiveArchitectureState(nodes, edges, activeFailures),
+    [nodes, edges, activeFailures]
+  );
+  const { nodes: effectiveNodes, edges: effectiveEdges, impacts: failureImpacts } = effectiveArchitectureState;
 
   // Load a reference architecture template
   const loadTemplate = useCallback((templateId: string) => {
@@ -739,6 +939,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     setNodes(template.nodes);
     setEdges(template.edges);
+    setActiveFailures([]);
     setSimulationResult(null);
     setActiveStepIndex(null);
     setSelectedNodeId(null);
@@ -756,31 +957,47 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         startNodeId: ingressNode.id
       }));
     }
+
+    // Auto-open the NACL side column for ANY template that ships a configured custom NACL -
+    // not just one hardcoded template id. A student's own saved/imported diagram, or a future
+    // template, gets the same guided-teaching treatment as soon as it actually has a customNacl
+    // to show, matching the same `customNacl` presence check `hasCustomNacl` uses for the
+    // canvas's own manual "Open NACL Panel" button.
+    const templateHasCustomNacl = template.nodes.some(n => Boolean((n.data as any)?.customNacl));
+    if (templateHasCustomNacl) {
+      setShowNaclSideColumn(true);
+    }
   }, [setNodes, setEdges]);
 
-  // Run Request Simulation
+  // Run Request Simulation - against `effectiveNodes`/`effectiveEdges`, i.e. the canvas with every
+  // active structured `Failure`'s real propagated consequence merged in (see
+  // engine/failure/effectiveState.ts), not just the manually-toggled `health` field.
   const runScenario = useCallback(() => {
-    const result = runSimulation(nodes, edges, scenario);
+    const result = runSimulation(effectiveNodes, effectiveEdges, scenario);
     setSimulationResult(result);
     setActiveStepIndex(0);
     setHoveredStepIndex(null);
     setHighlightTaskFlow(true);
     setIsPlaying(true);
     setAppMode('simulate');
-  }, [nodes, edges, scenario]);
+  }, [effectiveNodes, effectiveEdges, scenario]);
 
   // Toggle Task Flow lines on/off with smart auto-simulation
   const toggleTaskFlow = useCallback(() => {
     setHighlightTaskFlow((prev) => {
       const next = !prev;
       if (next && !simulationResult && nodes.length > 0) {
-        const result = runSimulation(nodes, edges, scenario);
+        const result = runSimulation(effectiveNodes, effectiveEdges, scenario);
         setSimulationResult(result);
         setActiveStepIndex(null);
       }
       return next;
     });
-  }, [nodes, edges, scenario, simulationResult]);
+  }, [nodes, effectiveNodes, effectiveEdges, scenario, simulationResult]);
+
+  // Explain the recorded run, including service/return-path failures and cache short circuits.
+  const requestTrace = useMemo<RequestTrace | null>(() =>
+    simulationResult ? traceFromSimulation(simulationResult) : null, [simulationResult]);
 
   const resetSimulation = useCallback(() => {
     setIsPlaying(false);
@@ -1051,9 +1268,13 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Challenge test
   const runChallengeTest = useCallback(() => {
     if (!activeChallenge) return;
-    const res = activeChallenge.evaluationCheck(nodes, edges, analysis);
+    const res = activeChallenge.evaluationCheck(nodes, edges, analysis, {
+      simulationResult,
+      validationFindings,
+      architecturalFindings
+    });
     setChallengeResult(res);
-  }, [activeChallenge, nodes, edges, analysis]);
+  }, [activeChallenge, nodes, edges, analysis, simulationResult, validationFindings, architecturalFindings]);
 
   return (
     <ArchitectureContext.Provider
@@ -1094,9 +1315,18 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         failAvailabilityZone,
         restoreAllNodes,
 
+        activeFailures,
+        injectFailure,
+        resolveFailure,
+        clearAllFailures,
+        effectiveNodes,
+        effectiveEdges,
+        failureImpacts,
+
         scenario,
         setScenario,
         simulationResult,
+        requestTrace,
         activeStepIndex,
         setActiveStepIndex,
         runScenario,
@@ -1116,6 +1346,8 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         analysis,
         recalculateAnalysis,
+        validationFindings,
+        architecturalFindings,
 
         loadTemplate,
         activeChallenge,
@@ -1123,8 +1355,9 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         challengeResult,
         runChallengeTest,
 
-        isTeachingMode,
-        setIsTeachingMode,
+        showNaclSideColumn,
+        setShowNaclSideColumn,
+        hasCustomNacl,
 
         costReport
       }}

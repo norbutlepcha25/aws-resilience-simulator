@@ -57,7 +57,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
     'Compute': { bg: 'bg-orange-50', text: 'text-orange-700', bar: 'bg-orange-500' },
     'Storage': { bg: 'bg-lime-50', text: 'text-lime-700', bar: 'bg-lime-500' },
     'Databases': { bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-500' },
-    'Networking & Content Delivery': { bg: 'bg-indigo-50', text: 'text-indigo-700', bar: 'bg-indigo-500' },
+    'Networking & Content Delivery': { bg: 'bg-circuit-50', text: 'text-circuit-700', bar: 'bg-circuit-500' },
     'Security, Identity & Compliance': { bg: 'bg-rose-50', text: 'text-rose-700', bar: 'bg-rose-500' },
     'Management & Governance': { bg: 'bg-pink-50', text: 'text-pink-700', bar: 'bg-pink-500' }
   };
@@ -73,7 +73,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
       <div className="bg-white border border-slate-200 w-full max-w-5xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white">
@@ -119,7 +119,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
           {/* Traffic Scale Simulator */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+              <TrendingUp className="w-3.5 h-3.5 text-circuit-600" />
               Simulate Traffic Load:
             </span>
             <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-2xs">
@@ -139,7 +139,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
                   }}
                   className={`px-2 py-1 rounded text-[11px] font-semibold transition-all ${
                     simulatedTraffic === t.id
-                      ? 'bg-blue-600 text-white shadow-xs'
+                      ? 'bg-circuit-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
@@ -212,7 +212,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
 
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 shadow-xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-              <Network className="w-3.5 h-3.5 text-indigo-600" />
+              <Network className="w-3.5 h-3.5 text-circuit-600" />
               Networking & Routing
             </span>
             <div className="text-xl font-bold font-mono text-slate-900 mt-1">
@@ -392,7 +392,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
                         ? 'border-rose-300'
                         : tip.severity === 'medium'
                         ? 'border-amber-300'
-                        : 'border-blue-200'
+                        : 'border-circuit-200'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -402,7 +402,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({ isOpen, 
                         ) : tip.severity === 'medium' ? (
                           <Zap className="w-4 h-4 text-amber-600 flex-shrink-0" />
                         ) : (
-                          <Sparkles className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                          <Sparkles className="w-4 h-4 text-circuit-600 flex-shrink-0" />
                         )}
                         <h4 className="text-xs font-bold text-slate-900">{tip.title}</h4>
                       </div>

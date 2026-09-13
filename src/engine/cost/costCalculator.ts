@@ -105,7 +105,374 @@ export function getTrafficScaleFactor(trafficLevel?: string): number {
 }
 
 /**
- * Calculates the realistic monthly and hourly AWS cost for an individual service node.
+ * Everything a pricing module needs to price one node, pre-extracted so every module reads the
+ * same shape rather than re-deriving replicas/multiAz/custom from `node.data` itself.
+ */
+export interface PricingContext {
+  node: Node<ServiceNodeData>;
+  label: string;
+  replicas: number;
+  multiAz: boolean;
+  custom: Record<string, any>;
+  trafficMultiplier: number;
+}
+
+export interface PricingResult {
+  lineItems: LineItem[];
+  configSummary: string;
+  freeTierEligible?: boolean;
+}
+
+export type PricingModule = (ctx: PricingContext) => PricingResult;
+
+/**
+ * One pricing module per AWS service family. Each is a pure function of the shared
+ * `PricingContext` in, `PricingResult` out - no module reads or writes any other module's state,
+ * so adding, removing, or correcting one service's pricing logic never risks another's. This
+ * replaces a single 300-line if/else-if chain keyed on `serviceId` with a flat, independently
+ * testable, independently reviewable unit per service family.
+ */
+const ec2Module: PricingModule = ({ replicas, custom }) => {
+  const instTypeKey = custom.instanceType || 't3.micro';
+  const inst = EC2_INSTANCE_TYPES[instTypeKey] || EC2_INSTANCE_TYPES['t3.micro'];
+  const purchasing = custom.purchasingOption || 'on_demand';
+  let purchaseDiscount = 1.0;
+  let purchaseLabel = 'On-Demand';
+  if (purchasing === 'savings_plan_1yr') { purchaseDiscount = 0.65; purchaseLabel = '1-Yr Savings Plan (35% off)'; }
+  else if (purchasing === 'savings_plan_3yr') { purchaseDiscount = 0.45; purchaseLabel = '3-Yr Savings Plan (55% off)'; }
+  else if (purchasing === 'spot') { purchaseDiscount = 0.30; purchaseLabel = 'Spot Instance (70% off)'; }
+
+  const osImage = custom.osImage || 'al2023';
+  let osLicenseHourly = 0;
+  if (osImage === 'rhel-9') osLicenseHourly = 0.06;
+  if (osImage === 'windows-2022') osLicenseHourly = 0.046;
+
+  const baseInstanceHourly = (inst.hourly * purchaseDiscount) + osLicenseHourly;
+  const instanceMonthly = baseInstanceHourly * HOURS_PER_MONTH * replicas;
+
+  const ebsType = custom.ebsVolumeType || 'gp3';
+  const ebsSizeGb = custom.ebsVolumeSizeGb !== undefined ? Number(custom.ebsVolumeSizeGb) : 30;
+  const ebsDef = EBS_VOLUME_TYPES[ebsType] || EBS_VOLUME_TYPES['gp3'];
+  const ebsCost = ebsDef.costPerGb * ebsSizeGb * replicas;
+
+  const freeTierEligible = instTypeKey === 't3.micro' && replicas === 1 && purchasing === 'on_demand';
+
+  return {
+    lineItems: [
+      {
+        name: `EC2 Compute: ${inst.label} × ${replicas} instance(s)`,
+        detail: `${replicas} × $${baseInstanceHourly.toFixed(4)}/hr (${purchaseLabel})`,
+        cost: instanceMonthly
+      },
+      {
+        name: `EBS Storage: ${ebsSizeGb} GB ${ebsType} × ${replicas} volume(s)`,
+        detail: `${ebsSizeGb * replicas} GB total @ $${ebsDef.costPerGb.toFixed(3)}/GB-mo`,
+        cost: ebsCost
+      }
+    ],
+    configSummary: `${instTypeKey}, ${ebsSizeGb}GB ${ebsType}, ${replicas} unit(s)`,
+    freeTierEligible
+  };
+};
+
+const s3Module: PricingModule = ({ custom, trafficMultiplier }) => {
+  const storageClassKey = custom.storageClass || 'STANDARD';
+  const sc = S3_STORAGE_CLASSES[storageClassKey] || S3_STORAGE_CLASSES['STANDARD'];
+  const storageGb = custom.storageGb !== undefined ? Number(custom.storageGb) : 50;
+  const storageCost = sc.costPerGb * storageGb;
+  const requestsCost = Math.max(0.10, 0.50 * trafficMultiplier);
+
+  return {
+    lineItems: [
+      {
+        name: `S3 Storage: ${storageGb} GB (${sc.label})`,
+        detail: `${storageGb} GB @ $${sc.costPerGb.toFixed(5)}/GB-mo`,
+        cost: storageCost
+      },
+      {
+        name: 'API Requests & Data Transfer',
+        detail: `PUT/GET operations scaled with traffic (${trafficMultiplier}x)`,
+        cost: requestsCost
+      }
+    ],
+    configSummary: `${sc.label}, ${storageGb} GB`
+  };
+};
+
+const rdsModule: PricingModule = ({ custom, multiAz }) => {
+  const instTypeKey = custom.dbInstanceClass || 'db.t4g.micro';
+  const inst = RDS_INSTANCE_TYPES[instTypeKey] || RDS_INSTANCE_TYPES['db.t4g.micro'];
+  const azMultiplier = multiAz ? 2.0 : 1.0;
+  const computeMonthly = inst.hourly * HOURS_PER_MONTH * azMultiplier;
+
+  const storageGb = custom.storageGb !== undefined ? Number(custom.storageGb) : 50;
+  const storageCost = 0.115 * storageGb * azMultiplier;
+
+  return {
+    lineItems: [
+      {
+        name: `RDS DB Instance: ${inst.label}${multiAz ? ' (Multi-AZ Standby)' : ''}`,
+        detail: `${azMultiplier}x instance @ $${inst.hourly.toFixed(3)}/hr × 730 hrs`,
+        cost: computeMonthly
+      },
+      {
+        name: `RDS Storage: ${storageGb} GB gp3${multiAz ? ' (Mirrored Multi-AZ)' : ''}`,
+        detail: `${storageGb * azMultiplier} GB @ $0.115/GB-mo`,
+        cost: storageCost
+      }
+    ],
+    configSummary: `${instTypeKey}, ${storageGb}GB, ${multiAz ? 'Multi-AZ' : 'Single-AZ'}`
+  };
+};
+
+const lambdaModule: PricingModule = ({ custom, trafficMultiplier }) => {
+  const arch = custom.architecture || 'arm64';
+  const memMb = custom.memoryMb !== undefined ? Number(custom.memoryMb) : 256;
+  const invocations = (custom.monthlyInvocations !== undefined ? Number(custom.monthlyInvocations) : 1000000) * trafficMultiplier;
+  const durationMs = custom.durationMs !== undefined ? Number(custom.durationMs) : 150;
+
+  const gbSeconds = (memMb / 1024) * (durationMs / 1000) * invocations;
+  const ratePerGbSec = arch === 'arm64' ? 0.0000133334 : 0.0000166667;
+  // 400,000 GB-seconds and 1M requests are in AWS Lambda free tier each month
+  const billableGbSec = Math.max(0, gbSeconds - 400000);
+  const billableRequests = Math.max(0, invocations - 1000000);
+
+  const computeCost = billableGbSec * ratePerGbSec;
+  const reqCost = (billableRequests / 1000000) * 0.20;
+  const totalLambda = Math.max(0.20, computeCost + reqCost);
+
+  return {
+    lineItems: [
+      {
+        name: `Lambda Invocations: ${(invocations / 1000000).toFixed(1)}M runs (${arch}, ${memMb}MB)`,
+        detail: `${durationMs}ms avg duration, ${gbSeconds.toFixed(0)} GB-sec`,
+        cost: totalLambda
+      }
+    ],
+    configSummary: `${arch}, ${memMb}MB, ${(invocations / 1000000).toFixed(1)}M inv`
+  };
+};
+
+const loadBalancerModule: PricingModule = ({ node, trafficMultiplier }) => {
+  const serviceId = node.data.serviceId;
+  const baseRate = 0.0225; // $0.0225/hr
+  const lcuHourly = serviceId === 'nlb' ? 0.006 : 0.008;
+  const lcuCount = Math.max(1, Math.round(1 * trafficMultiplier));
+  const baseCost = baseRate * HOURS_PER_MONTH;
+  const lcuCost = lcuCount * lcuHourly * HOURS_PER_MONTH;
+
+  return {
+    lineItems: [
+      {
+        name: `${serviceId.toUpperCase()} Hourly Base Fee`,
+        detail: `$0.0225/hr × 730 hours`,
+        cost: baseCost
+      },
+      {
+        name: `Capacity Units (${lcuCount} ${serviceId === 'nlb' ? 'NLCU' : 'LCU'})`,
+        detail: `$${lcuHourly.toFixed(3)}/hr scaled with traffic`,
+        cost: lcuCost
+      }
+    ],
+    configSummary: `${serviceId.toUpperCase()}, ${lcuCount} LCU`
+  };
+};
+
+const natGatewayModule: PricingModule = ({ trafficMultiplier }) => {
+  const hourlyCost = 0.045 * HOURS_PER_MONTH;
+  const gbProcessed = 100 * trafficMultiplier;
+  const dataCost = gbProcessed * 0.045;
+
+  return {
+    lineItems: [
+      {
+        name: 'NAT Gateway Hourly Fee',
+        detail: '$0.045/hr × 730 hours (running constantly)',
+        cost: hourlyCost
+      },
+      {
+        name: `NAT Data Processing: ${gbProcessed} GB`,
+        detail: `$0.045/GB processed out to internet`,
+        cost: dataCost
+      }
+    ],
+    configSummary: `1 NAT GW, ${gbProcessed}GB processed`
+  };
+};
+
+const fargateModule: PricingModule = ({ custom, replicas }) => {
+  const vCpu = custom.vCpu !== undefined ? Number(custom.vCpu) : 0.5;
+  const ramGb = custom.ramGb !== undefined ? Number(custom.ramGb) : 1.0;
+  const vCpuMonthly = vCpu * 0.04048 * HOURS_PER_MONTH * replicas;
+  const ramMonthly = ramGb * 0.004445 * HOURS_PER_MONTH * replicas;
+
+  return {
+    lineItems: [
+      {
+        name: `Fargate Compute: ${vCpu} vCPU × ${replicas} task(s)`,
+        detail: `$0.04048 per vCPU-hr × 730 hrs`,
+        cost: vCpuMonthly
+      },
+      {
+        name: `Fargate Memory: ${ramGb} GB RAM × ${replicas} task(s)`,
+        detail: `$0.004445 per GB-hr × 730 hrs`,
+        cost: ramMonthly
+      }
+    ],
+    configSummary: `${vCpu} vCPU, ${ramGb}GB, ${replicas} tasks`
+  };
+};
+
+const cloudfrontModule: PricingModule = ({ trafficMultiplier }) => {
+  const gbData = 150 * trafficMultiplier;
+  const dataCost = gbData * 0.085;
+  const requestCost = 0.75 * trafficMultiplier;
+
+  return {
+    lineItems: [
+      {
+        name: `Edge Data Transfer Out: ${gbData.toFixed(0)} GB`,
+        detail: `$0.085/GB standard edge egress`,
+        cost: dataCost
+      },
+      {
+        name: 'HTTPS Request Routing',
+        detail: '$0.01 per 10,000 requests',
+        cost: requestCost
+      }
+    ],
+    configSummary: `Global Edge, ${gbData.toFixed(0)}GB egress`
+  };
+};
+
+const dynamoDbModule: PricingModule = ({ trafficMultiplier }) => {
+  const storageGb = 10;
+  const storageCost = storageGb * 0.25;
+  const rcuWcuCost = 2.50 * trafficMultiplier;
+
+  return {
+    lineItems: [
+      {
+        name: `DynamoDB Table Storage: ${storageGb} GB`,
+        detail: '$0.25/GB-mo (first 25GB free in real AWS)',
+        cost: storageCost
+      },
+      {
+        name: 'On-Demand Read/Write Requests',
+        detail: `Scaled by traffic load (${trafficMultiplier}x)`,
+        cost: rcuWcuCost
+      }
+    ],
+    configSummary: 'On-Demand, 10GB table'
+  };
+};
+
+const route53Module: PricingModule = ({ trafficMultiplier }) => ({
+  lineItems: [
+    { name: 'Hosted Zone Fee', detail: '$0.50 per hosted zone / month', cost: 0.50 },
+    { name: 'DNS Queries', detail: `$0.40 per 1M queries (${trafficMultiplier}x traffic)`, cost: 0.40 * trafficMultiplier }
+  ],
+  configSummary: 'Public Hosted Zone'
+});
+
+const eksModule: PricingModule = () => ({
+  lineItems: [
+    { name: 'EKS Cluster Management Fee', detail: '$0.10/hour × 730 hours (AWS control plane)', cost: 73.00 }
+  ],
+  configSummary: 'Managed Control Plane'
+});
+
+const elastiCacheModule: PricingModule = ({ replicas }) => {
+  const hourly = 0.016; // cache.t4g.micro
+  const nodeCost = hourly * HOURS_PER_MONTH * replicas;
+  return {
+    lineItems: [
+      {
+        name: `ElastiCache Redis: cache.t4g.micro × ${replicas} node(s)`,
+        detail: `$0.016/hr × 730 hrs`,
+        cost: nodeCost
+      }
+    ],
+    configSummary: `Redis cache.t4g.micro, ${replicas} node(s)`
+  };
+};
+
+const wafModule: PricingModule = () => ({
+  lineItems: [
+    { name: 'AWS WAF Web ACL', detail: '$5.00/mo Web ACL + $3.00 for 3 managed rule groups', cost: 8.00 }
+  ],
+  configSummary: 'Web ACL + 3 Managed Rules'
+});
+
+const freeClientModule: PricingModule = () => ({
+  lineItems: [
+    { name: 'Client Actor', detail: 'External traffic actor (no AWS hosting charges)', cost: 0.00 }
+  ],
+  configSummary: 'External Client Actor'
+});
+
+const freeInternetGatewayModule: PricingModule = () => ({
+  lineItems: [
+    { name: 'Internet Gateway', detail: 'Free VPC component (bandwidth billed to EC2/ALB)', cost: 0.00 }
+  ],
+  configSummary: 'VPC Attached Gateway (Free)'
+});
+
+const freeVpcEndpointModule: PricingModule = () => ({
+  lineItems: [
+    { name: 'Gateway VPC Endpoint', detail: 'Free AWS Gateway Endpoint for S3 / DynamoDB (saves NAT fees!)', cost: 0.00 }
+  ],
+  configSummary: 'Free Gateway VPC Endpoint'
+});
+
+const fallbackModule: PricingModule = ({ label, replicas }) => ({
+  lineItems: [
+    {
+      name: `${label} Managed Service Provisioning`,
+      detail: `Standard baseline estimated usage × ${replicas} instance(s)`,
+      cost: 5.00 * replicas
+    }
+  ],
+  configSummary: `Standard managed resource (${replicas} unit)`
+});
+
+/**
+ * Registry mapping every catalog `serviceId` this app prices to its pricing module. Built from
+ * `{ serviceIds, module }` entries rather than hand-writing one map key at a time, so a service
+ * family covering several ids (e.g. ALB/NLB/ELB, or ECS/Fargate/App Runner) is declared once.
+ * Order carries no meaning here (unlike the if/else-if chain this replaces) because the id sets
+ * below are mutually exclusive by construction - each serviceId maps to exactly one module.
+ */
+const PRICING_MODULE_ENTRIES: { serviceIds: string[]; module: PricingModule }[] = [
+  { serviceIds: ['ec2'], module: ec2Module },
+  { serviceIds: ['s3'], module: s3Module },
+  { serviceIds: ['rds', 'aurora'], module: rdsModule },
+  { serviceIds: ['lambda'], module: lambdaModule },
+  { serviceIds: ['alb', 'nlb'], module: loadBalancerModule },
+  { serviceIds: ['nat_gateway'], module: natGatewayModule },
+  { serviceIds: ['ecs', 'fargate', 'app_runner'], module: fargateModule },
+  { serviceIds: ['cloudfront'], module: cloudfrontModule },
+  { serviceIds: ['dynamodb'], module: dynamoDbModule },
+  { serviceIds: ['route53'], module: route53Module },
+  { serviceIds: ['eks'], module: eksModule },
+  { serviceIds: ['elasticache'], module: elastiCacheModule },
+  { serviceIds: ['waf'], module: wafModule },
+  { serviceIds: ['user', 'client_ui', 'api_client'], module: freeClientModule },
+  { serviceIds: ['internet_gateway'], module: freeInternetGatewayModule },
+  { serviceIds: ['s3_gateway_endpoint'], module: freeVpcEndpointModule }
+];
+
+const PRICING_MODULE_REGISTRY: Record<string, PricingModule> = {};
+for (const { serviceIds, module } of PRICING_MODULE_ENTRIES) {
+  for (const id of serviceIds) {
+    PRICING_MODULE_REGISTRY[id] = module;
+  }
+}
+
+/**
+ * Calculates the realistic monthly and hourly AWS cost for an individual service node by
+ * dispatching to that service's pricing module (falling back to a flat baseline estimate for
+ * any catalog service without one).
  */
 export function calculateNodeCost(node: Node<ServiceNodeData>, trafficMultiplier = 1.0): NodeCostEstimate {
   const serviceId = node.data.serviceId || 'ec2';
@@ -115,307 +482,10 @@ export function calculateNodeCost(node: Node<ServiceNodeData>, trafficMultiplier
   const multiAz = Boolean(node.data.multiAz);
   const custom = node.data.customConfig || {};
 
-  const lineItems: LineItem[] = [];
-  let configSummary = '';
-  let freeTierEligible = false;
-
-  // 1. Amazon EC2
-  if (serviceId === 'ec2') {
-    const instTypeKey = custom.instanceType || 't3.micro';
-    const inst = EC2_INSTANCE_TYPES[instTypeKey] || EC2_INSTANCE_TYPES['t3.micro'];
-    const purchasing = custom.purchasingOption || 'on_demand';
-    let purchaseDiscount = 1.0;
-    let purchaseLabel = 'On-Demand';
-    if (purchasing === 'savings_plan_1yr') { purchaseDiscount = 0.65; purchaseLabel = '1-Yr Savings Plan (35% off)'; }
-    else if (purchasing === 'savings_plan_3yr') { purchaseDiscount = 0.45; purchaseLabel = '3-Yr Savings Plan (55% off)'; }
-    else if (purchasing === 'spot') { purchaseDiscount = 0.30; purchaseLabel = 'Spot Instance (70% off)'; }
-
-    const osImage = custom.osImage || 'al2023';
-    let osLicenseHourly = 0;
-    if (osImage === 'rhel-9') osLicenseHourly = 0.06;
-    if (osImage === 'windows-2022') osLicenseHourly = 0.046;
-
-    const baseInstanceHourly = (inst.hourly * purchaseDiscount) + osLicenseHourly;
-    const instanceMonthly = baseInstanceHourly * HOURS_PER_MONTH * replicas;
-    lineItems.push({
-      name: `EC2 Compute: ${inst.label} × ${replicas} instance(s)`,
-      detail: `${replicas} × $${baseInstanceHourly.toFixed(4)}/hr (${purchaseLabel})`,
-      cost: instanceMonthly
-    });
-
-    const ebsType = custom.ebsVolumeType || 'gp3';
-    const ebsSizeGb = custom.ebsVolumeSizeGb !== undefined ? Number(custom.ebsVolumeSizeGb) : 30;
-    const ebsDef = EBS_VOLUME_TYPES[ebsType] || EBS_VOLUME_TYPES['gp3'];
-    const ebsCost = ebsDef.costPerGb * ebsSizeGb * replicas;
-    lineItems.push({
-      name: `EBS Storage: ${ebsSizeGb} GB ${ebsType} × ${replicas} volume(s)`,
-      detail: `${ebsSizeGb * replicas} GB total @ $${ebsDef.costPerGb.toFixed(3)}/GB-mo`,
-      cost: ebsCost
-    });
-
-    if (instTypeKey === 't3.micro' && replicas === 1 && purchasing === 'on_demand') {
-      freeTierEligible = true;
-    }
-    configSummary = `${instTypeKey}, ${ebsSizeGb}GB ${ebsType}, ${replicas} unit(s)`;
-  }
-
-  // 2. Amazon S3
-  else if (serviceId === 's3' || serviceId === 's3_client' || serviceId === 's3_managed') {
-    const storageClassKey = custom.storageClass || 'STANDARD';
-    const sc = S3_STORAGE_CLASSES[storageClassKey] || S3_STORAGE_CLASSES['STANDARD'];
-    const storageGb = custom.storageGb !== undefined ? Number(custom.storageGb) : 50;
-
-    const storageCost = sc.costPerGb * storageGb;
-    lineItems.push({
-      name: `S3 Storage: ${storageGb} GB (${sc.label})`,
-      detail: `${storageGb} GB @ $${sc.costPerGb.toFixed(5)}/GB-mo`,
-      cost: storageCost
-    });
-
-    const requestsCost = Math.max(0.10, 0.50 * trafficMultiplier);
-    lineItems.push({
-      name: 'API Requests & Data Transfer',
-      detail: `PUT/GET operations scaled with traffic (${trafficMultiplier}x)`,
-      cost: requestsCost
-    });
-
-    configSummary = `${sc.label}, ${storageGb} GB`;
-  }
-
-  // 3. Amazon RDS / Aurora
-  else if (serviceId === 'rds' || serviceId === 'aurora') {
-    const instTypeKey = custom.dbInstanceClass || 'db.t4g.micro';
-    const inst = RDS_INSTANCE_TYPES[instTypeKey] || RDS_INSTANCE_TYPES['db.t4g.micro'];
-    const azMultiplier = multiAz ? 2.0 : 1.0;
-    const computeMonthly = inst.hourly * HOURS_PER_MONTH * azMultiplier;
-
-    lineItems.push({
-      name: `RDS DB Instance: ${inst.label}${multiAz ? ' (Multi-AZ Standby)' : ''}`,
-      detail: `${azMultiplier}x instance @ $${inst.hourly.toFixed(3)}/hr × 730 hrs`,
-      cost: computeMonthly
-    });
-
-    const storageGb = custom.storageGb !== undefined ? Number(custom.storageGb) : 50;
-    const storageCost = 0.115 * storageGb * azMultiplier;
-    lineItems.push({
-      name: `RDS Storage: ${storageGb} GB gp3${multiAz ? ' (Mirrored Multi-AZ)' : ''}`,
-      detail: `${storageGb * azMultiplier} GB @ $0.115/GB-mo`,
-      cost: storageCost
-    });
-
-    configSummary = `${instTypeKey}, ${storageGb}GB, ${multiAz ? 'Multi-AZ' : 'Single-AZ'}`;
-  }
-
-  // 4. AWS Lambda
-  else if (serviceId === 'lambda' || serviceId === 'step_lambda') {
-    const arch = custom.architecture || 'arm64';
-    const memMb = custom.memoryMb !== undefined ? Number(custom.memoryMb) : 256;
-    const invocations = (custom.monthlyInvocations !== undefined ? Number(custom.monthlyInvocations) : 1000000) * trafficMultiplier;
-    const durationMs = custom.durationMs !== undefined ? Number(custom.durationMs) : 150;
-
-    const gbSeconds = (memMb / 1024) * (durationMs / 1000) * invocations;
-    const ratePerGbSec = arch === 'arm64' ? 0.0000133334 : 0.0000166667;
-    // 400,000 GB-seconds and 1M requests are in AWS Lambda free tier each month
-    const billableGbSec = Math.max(0, gbSeconds - 400000);
-    const billableRequests = Math.max(0, invocations - 1000000);
-
-    const computeCost = billableGbSec * ratePerGbSec;
-    const reqCost = (billableRequests / 1000000) * 0.20;
-    const totalLambda = Math.max(0.20, computeCost + reqCost);
-
-    lineItems.push({
-      name: `Lambda Invocations: ${(invocations / 1000000).toFixed(1)}M runs (${arch}, ${memMb}MB)`,
-      detail: `${durationMs}ms avg duration, ${gbSeconds.toFixed(0)} GB-sec`,
-      cost: totalLambda
-    });
-
-    configSummary = `${arch}, ${memMb}MB, ${(invocations / 1000000).toFixed(1)}M inv`;
-  }
-
-  // 5. Load Balancers (ALB, NLB)
-  else if (serviceId === 'alb' || serviceId === 'nlb' || serviceId === 'elb') {
-    const baseRate = 0.0225; // $0.0225/hr
-    const lcuHourly = serviceId === 'nlb' ? 0.006 : 0.008;
-    const lcuCount = Math.max(1, Math.round(1 * trafficMultiplier));
-    const baseCost = baseRate * HOURS_PER_MONTH;
-    const lcuCost = lcuCount * lcuHourly * HOURS_PER_MONTH;
-
-    lineItems.push({
-      name: `${serviceId.toUpperCase()} Hourly Base Fee`,
-      detail: `$0.0225/hr × 730 hours`,
-      cost: baseCost
-    });
-    lineItems.push({
-      name: `Capacity Units (${lcuCount} ${serviceId === 'nlb' ? 'NLCU' : 'LCU'})`,
-      detail: `$${lcuHourly.toFixed(3)}/hr scaled with traffic`,
-      cost: lcuCost
-    });
-
-    configSummary = `${serviceId.toUpperCase()}, ${lcuCount} LCU`;
-  }
-
-  // 6. NAT Gateway
-  else if (serviceId === 'nat_gateway') {
-    const hourlyCost = 0.045 * HOURS_PER_MONTH;
-    const gbProcessed = 100 * trafficMultiplier;
-    const dataCost = gbProcessed * 0.045;
-
-    lineItems.push({
-      name: 'NAT Gateway Hourly Fee',
-      detail: '$0.045/hr × 730 hours (running constantly)',
-      cost: hourlyCost
-    });
-    lineItems.push({
-      name: `NAT Data Processing: ${gbProcessed} GB`,
-      detail: `$0.045/GB processed out to internet`,
-      cost: dataCost
-    });
-
-    configSummary = `1 NAT GW, ${gbProcessed}GB processed`;
-  }
-
-  // 7. ECS / Fargate Containers
-  else if (serviceId === 'ecs' || serviceId === 'fargate' || serviceId === 'app_runner') {
-    const vCpu = custom.vCpu !== undefined ? Number(custom.vCpu) : 0.5;
-    const ramGb = custom.ramGb !== undefined ? Number(custom.ramGb) : 1.0;
-    const vCpuMonthly = vCpu * 0.04048 * HOURS_PER_MONTH * replicas;
-    const ramMonthly = ramGb * 0.004445 * HOURS_PER_MONTH * replicas;
-
-    lineItems.push({
-      name: `Fargate Compute: ${vCpu} vCPU × ${replicas} task(s)`,
-      detail: `$0.04048 per vCPU-hr × 730 hrs`,
-      cost: vCpuMonthly
-    });
-    lineItems.push({
-      name: `Fargate Memory: ${ramGb} GB RAM × ${replicas} task(s)`,
-      detail: `$0.004445 per GB-hr × 730 hrs`,
-      cost: ramMonthly
-    });
-
-    configSummary = `${vCpu} vCPU, ${ramGb}GB, ${replicas} tasks`;
-  }
-
-  // 8. Amazon CloudFront
-  else if (serviceId === 'cloudfront') {
-    const gbData = 150 * trafficMultiplier;
-    const dataCost = gbData * 0.085;
-    const requestCost = 0.75 * trafficMultiplier;
-
-    lineItems.push({
-      name: `Edge Data Transfer Out: ${gbData.toFixed(0)} GB`,
-      detail: `$0.085/GB standard edge egress`,
-      cost: dataCost
-    });
-    lineItems.push({
-      name: 'HTTPS Request Routing',
-      detail: '$0.01 per 10,000 requests',
-      cost: requestCost
-    });
-
-    configSummary = `Global Edge, ${gbData.toFixed(0)}GB egress`;
-  }
-
-  // 9. Amazon DynamoDB
-  else if (serviceId === 'dynamodb') {
-    const storageGb = 10;
-    const storageCost = storageGb * 0.25;
-    const rcuWcuCost = 2.50 * trafficMultiplier;
-
-    lineItems.push({
-      name: `DynamoDB Table Storage: ${storageGb} GB`,
-      detail: '$0.25/GB-mo (first 25GB free in real AWS)',
-      cost: storageCost
-    });
-    lineItems.push({
-      name: 'On-Demand Read/Write Requests',
-      detail: `Scaled by traffic load (${trafficMultiplier}x)`,
-      cost: rcuWcuCost
-    });
-
-    configSummary = 'On-Demand, 10GB table';
-  }
-
-  // 10. Route 53
-  else if (serviceId === 'route53') {
-    lineItems.push({
-      name: 'Hosted Zone Fee',
-      detail: '$0.50 per hosted zone / month',
-      cost: 0.50
-    });
-    lineItems.push({
-      name: 'DNS Queries',
-      detail: `$0.40 per 1M queries (${trafficMultiplier}x traffic)`,
-      cost: 0.40 * trafficMultiplier
-    });
-    configSummary = 'Public Hosted Zone';
-  }
-
-  // 11. Amazon EKS
-  else if (serviceId === 'eks') {
-    lineItems.push({
-      name: 'EKS Cluster Management Fee',
-      detail: '$0.10/hour × 730 hours (AWS control plane)',
-      cost: 73.00
-    });
-    configSummary = 'Managed Control Plane';
-  }
-
-  // 12. Amazon ElastiCache
-  else if (serviceId === 'elasticache') {
-    const hourly = 0.016; // cache.t4g.micro
-    const nodeCost = hourly * HOURS_PER_MONTH * replicas;
-    lineItems.push({
-      name: `ElastiCache Redis: cache.t4g.micro × ${replicas} node(s)`,
-      detail: `$0.016/hr × 730 hrs`,
-      cost: nodeCost
-    });
-    configSummary = `Redis cache.t4g.micro, ${replicas} node(s)`;
-  }
-
-  // 13. AWS WAF
-  else if (serviceId === 'waf') {
-    lineItems.push({
-      name: 'AWS WAF Web ACL',
-      detail: '$5.00/mo Web ACL + $3.00 for 3 managed rule groups',
-      cost: 8.00
-    });
-    configSummary = 'Web ACL + 3 Managed Rules';
-  }
-
-  // 14. Clients and Gateways with zero/minimal fees
-  else if (['user', 'client_ui', 'api_client'].includes(serviceId)) {
-    lineItems.push({
-      name: 'Client Actor',
-      detail: 'External traffic actor (no AWS hosting charges)',
-      cost: 0.00
-    });
-    configSummary = 'External Client Actor';
-  } else if (serviceId === 'igw' || serviceId === 'internet_gateway') {
-    lineItems.push({
-      name: 'Internet Gateway',
-      detail: 'Free VPC component (bandwidth billed to EC2/ALB)',
-      cost: 0.00
-    });
-    configSummary = 'VPC Attached Gateway (Free)';
-  } else if (serviceId === 's3_gateway' || serviceId === 'vpc_endpoint') {
-    lineItems.push({
-      name: 'Gateway VPC Endpoint',
-      detail: 'Free AWS Gateway Endpoint for S3 / DynamoDB (saves NAT fees!)',
-      cost: 0.00
-    });
-    configSummary = 'Free Gateway VPC Endpoint';
-  }
-
-  // Baseline fallback for any other AWS catalog service
-  else {
-    const baselineMonthly = 5.00 * replicas;
-    lineItems.push({
-      name: `${label} Managed Service Provisioning`,
-      detail: `Standard baseline estimated usage × ${replicas} instance(s)`,
-      cost: baselineMonthly
-    });
-    configSummary = `Standard managed resource (${replicas} unit)`;
-  }
+  const pricingModule = PRICING_MODULE_REGISTRY[serviceId] || fallbackModule;
+  const { lineItems, configSummary, freeTierEligible } = pricingModule({
+    node, label, replicas, multiAz, custom, trafficMultiplier
+  });
 
   const monthlyCost = lineItems.reduce((sum, item) => sum + item.cost, 0);
   const hourlyCost = monthlyCost / HOURS_PER_MONTH;
@@ -429,7 +499,7 @@ export function calculateNodeCost(node: Node<ServiceNodeData>, trafficMultiplier
     hourlyCost,
     lineItems,
     configurationSummary: configSummary,
-    freeTierEligible
+    freeTierEligible: freeTierEligible || false
   };
 }
 
@@ -462,8 +532,8 @@ export function calculateArchitectureCost(
 
   // Tip 1: NAT Gateway cost check
   const natNodes = serviceNodes.filter(n => n.data.serviceId === 'nat_gateway');
-  const s3Nodes = serviceNodes.filter(n => n.data.serviceId === 's3' || n.data.serviceId === 's3_client');
-  const s3Endpoints = serviceNodes.filter(n => n.data.serviceId === 's3_gateway');
+  const s3Nodes = serviceNodes.filter(n => n.data.serviceId === 's3');
+  const s3Endpoints = serviceNodes.filter(n => n.data.serviceId === 's3_gateway_endpoint');
 
   if (natNodes.length > 0 && s3Nodes.length > 0 && s3Endpoints.length === 0) {
     recommendations.push({
@@ -512,7 +582,7 @@ export function calculateArchitectureCost(
   }
 
   // Tip 4: S3 Intelligent-Tiering
-  const standardS3 = serviceNodes.filter(n => (n.data.serviceId === 's3' || n.data.serviceId === 's3_managed') && (!n.data.customConfig?.storageClass || n.data.customConfig.storageClass === 'STANDARD'));
+  const standardS3 = serviceNodes.filter(n => n.data.serviceId === 's3' && (!n.data.customConfig?.storageClass || n.data.customConfig.storageClass === 'STANDARD'));
   if (standardS3.length > 0) {
     recommendations.push({
       id: 'tip-s3-tiering',

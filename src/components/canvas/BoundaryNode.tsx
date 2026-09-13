@@ -6,8 +6,10 @@ import {
   Lock,
   Zap,
   Server,
-  AlertTriangle
+  AlertTriangle,
+  Shield
 } from 'lucide-react';
+import type { SubnetNaclConfig } from '../../types/index.ts';
 
 export interface BoundaryNodeData {
   label?: string;
@@ -32,6 +34,8 @@ export interface BoundaryNodeData {
   usableRange?: { start: string; end: string } | null;
   /** Network ACL explicit DENY list (`private_subnet`/`public_subnet` boundaries only). */
   naclDenyInbound?: string[];
+  /** Custom Network ACL with detailed Inbound/Outbound rule tables */
+  customNacl?: SubnetNaclConfig;
   /** Security Group explicit ALLOW list (`security_group` boundaries only). `undefined` means
    *  the default wide-open AWS-created Security Group; an empty array means an explicitly
    *  configured group that denies all inbound traffic. */
@@ -130,6 +134,12 @@ export const BoundaryNode = memo((props: any) => {
               </span>
             ) : null}
           </div>
+          {data.customNacl && (
+            <div className="absolute top-2 right-3 flex items-center gap-1.5 bg-slate-50/95 hover:bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-semibold border border-slate-200 pointer-events-auto shadow-2xs">
+              <Shield className="w-3 h-3 text-emerald-600" />
+              <span>{data.customNacl.naclName || 'Public Subnet NACL: Custom'}</span>
+            </div>
+          )}
         </div>
       );
     }
@@ -159,12 +169,18 @@ export const BoundaryNode = memo((props: any) => {
               >
                 <span>({data.cidr}</span>
                 {data.usableHosts !== undefined && (
-                  <span className="text-blue-700 font-semibold">• {data.usableHosts} usable</span>
+                  <span className="text-circuit-700 font-semibold">• {data.usableHosts} usable</span>
                 )}
                 <span>)</span>
               </span>
             ) : null}
           </div>
+          {data.customNacl && (
+            <div className="absolute top-2 right-3 flex items-center gap-1.5 bg-slate-50/95 hover:bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-semibold border border-slate-200 pointer-events-auto shadow-2xs">
+              <Shield className="w-3 h-3 text-circuit-600" />
+              <span>{data.customNacl.naclName || 'Private Subnet NACL: Custom'}</span>
+            </div>
+          )}
         </div>
       );
     }
@@ -235,8 +251,8 @@ export const BoundaryNode = memo((props: any) => {
         isVisible={selected}
         minWidth={100}
         minHeight={40}
-        lineClassName="!border-blue-500 !border-dashed !z-50 pointer-events-auto"
-        handleClassName="!h-3.5 !w-3.5 !bg-white !border-2 !border-blue-600 !rounded-xs !shadow-lg hover:scale-125 transition-transform !z-50 pointer-events-auto cursor-pointer"
+        lineClassName="!border-circuit-500 !border-dashed !z-50 pointer-events-auto"
+        handleClassName="!h-3.5 !w-3.5 !bg-white !border-2 !border-circuit-600 !rounded-xs !shadow-lg hover:scale-125 transition-transform !z-50 pointer-events-auto cursor-pointer"
       />
       {renderBoundaryFrame()}
     </div>

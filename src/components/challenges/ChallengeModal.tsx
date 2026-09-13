@@ -29,7 +29,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({ isOpen, onClose 
   const currentChallenge = activeChallenge || STUDENT_CHALLENGES[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
       <div className="bg-white border border-slate-200 w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white">
@@ -79,13 +79,13 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({ isOpen, onClose 
           {/* Scenario Overview */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-bold text-blue-700 uppercase tracking-wider">
+              <span className="text-xs font-mono font-bold text-circuit-700 uppercase tracking-wider">
                 Level: {currentChallenge.level} • Traffic: {currentChallenge.trafficScale}
               </span>
               {currentChallenge.initialTemplateId && (
                 <button
                   onClick={() => loadTemplate(currentChallenge.initialTemplateId!)}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 transition-colors"
+                  className="text-xs text-circuit-600 hover:text-circuit-800 font-semibold flex items-center gap-1 transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Load Challenge Starter Canvas

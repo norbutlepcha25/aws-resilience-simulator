@@ -5,7 +5,7 @@
 @layer base {
   body {
     @apply bg-white text-slate-800;
-    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -47,5 +47,35 @@
   to {
     stroke-dashoffset: 0;
   }
+}
+
+/* Idle connection: a subtle "alive" breathing pulse - distinct from active (moving particles),
+   completed (static, brighter), and failed (red, stopped packet). */
+@keyframes edge-idle-pulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Stationary pulse marking where a failed request's packet stopped - not the same animation as
+   an idle line; this one is red and reads as "blocked here", not "waiting". */
+@keyframes edge-blocked-pulse {
+  0%, 100% {
+    r: 7;
+    opacity: 0.55;
+  }
+  50% {
+    r: 11;
+    opacity: 0.15;
+  }
+}
+
+/* Ensure Edge Label Renderer and Tooltips render above all canvas nodes so tooltips are never drawn at the back */
+.react-flow__edgelabel-renderer {
+  z-index: 1001 !important;
+  pointer-events: none;
 }
 

@@ -14,6 +14,274 @@ export interface ReferenceArchitecture {
 
 export const REFERENCE_ARCHITECTURES: ReferenceArchitecture[] = [
   {
+    id: 'nacl-custom-stateless-timeout',
+    name: 'Problem 3.1: Cause of Connection Timeout due to Custom NACLs',
+    category: 'Networking & VPC Design',
+    difficulty: 'Intermediate',
+    description: 'Investigates why connections time out when using custom Network ACLs due to their stateless nature. In this architecture, Web Server in Public Subnet (10.0.1.0/24) initiates a MySQL connection to Database in Private Subnet (10.0.2.0/24). The forward request is allowed, but return traffic is blocked because the custom NACL is missing an inbound rule for return ephemeral ports (1024-65535).',
+    learningOutcome: 'Key Insight: Connections time out because NACLs are stateless. A custom NACL must explicitly allow inbound ephemeral ports (e.g., 1024-65535) for the return traffic from the database. Even with "Allow All" outbound, the traffic is blocked upon return to the public subnet.',
+    nodes: [
+      // 1. Boundary: VPC (10.0.0.0/16)
+      {
+        id: 'box-vpc',
+        type: 'boundaryNode',
+        position: { x: 40, y: 30 },
+        data: {
+          label: 'VPC: 10.0.0.0/16',
+          boundaryType: 'vpc',
+          width: 760,
+          height: 480,
+          cidr: '10.0.0.0/16'
+        },
+        style: { width: 760, height: 480 },
+        draggable: false,
+        selectable: true,
+        zIndex: -2
+      },
+
+      // 2. Boundary: Public Subnet (10.0.1.0/24)
+      {
+        id: 'box-public-subnet',
+        type: 'boundaryNode',
+        position: { x: 70, y: 65 },
+        data: {
+          label: 'Public Subnet: 10.0.1.0/24',
+          boundaryType: 'public_subnet',
+          width: 700,
+          height: 190,
+          cidr: '10.0.1.0/24',
+          customNacl: {
+            naclName: 'Public Subnet NACL: Custom',
+            isCustom: true,
+            inboundRules: [
+              { ruleNumber: 90, type: 'HTTP', protocol: 'TCP', portRange: '80', cidr: '0.0.0.0/0', action: 'ALLOW' },
+              { ruleNumber: 100, type: 'TCP 3306', protocol: 'TCP', portRange: '3306', cidr: '10.0.2.0/24', action: 'ALLOW' },
+              { ruleNumber: 110, type: 'Ephemeral Ports', protocol: 'TCP', portRange: '1024-65535', cidr: '10.0.2.0/24', action: 'ALLOW', isStatelessReturn: true, isMissingReturn: true },
+              { ruleNumber: 32767, type: 'All Traffic', protocol: 'All', portRange: 'All', cidr: '0.0.0.0/0', action: 'DENY' }
+            ],
+            outboundRules: [
+              { ruleNumber: 100, type: 'TCP 3306', protocol: 'TCP', portRange: '3306', cidr: '10.0.2.0/24', action: 'ALLOW' },
+              { ruleNumber: 110, type: 'All Traffic', protocol: 'All', portRange: 'All', cidr: '0.0.0.0/0', action: 'ALLOW' },
+              { ruleNumber: 32767, type: 'All Traffic', protocol: 'All', portRange: 'All', cidr: '0.0.0.0/0', action: 'DENY' }
+            ]
+          }
+        },
+        style: { width: 700, height: 190 },
+        draggable: false,
+        selectable: true,
+        zIndex: 0
+      },
+
+      // 3. Boundary: Web Server Security Group
+      {
+        id: 'box-web-sg',
+        type: 'boundaryNode',
+        position: { x: 230, y: 95 },
+        data: {
+          label: 'Web Server SG',
+          boundaryType: 'security_group',
+          width: 170,
+          height: 120,
+          allowedProtocols: ['HTTP', 'SQL']
+        },
+        style: { width: 170, height: 120 },
+        draggable: false,
+        selectable: true,
+        zIndex: 1
+      },
+
+      // 4. Boundary: Private Subnet (10.0.2.0/24)
+      {
+        id: 'box-private-subnet',
+        type: 'boundaryNode',
+        position: { x: 70, y: 280 },
+        data: {
+          label: 'Private Subnet: 10.0.2.0/24',
+          boundaryType: 'private_subnet',
+          width: 700,
+          height: 200,
+          cidr: '10.0.2.0/24',
+          customNacl: {
+            naclName: 'Private Subnet NACL: Custom',
+            isCustom: true,
+            inboundRules: [
+              { ruleNumber: 100, type: 'TCP 3306', protocol: 'TCP', portRange: '3306', cidr: '10.0.1.0/24', action: 'ALLOW' },
+              { ruleNumber: 110, type: 'Ephemeral Ports', protocol: 'TCP', portRange: '1024-65535', cidr: '0.0.0.0/0', action: 'ALLOW' },
+              { ruleNumber: 32767, type: 'All Traffic', protocol: 'All', portRange: 'All', cidr: '0.0.0.0/0', action: 'DENY' }
+            ],
+            outboundRules: [
+              { ruleNumber: 100, type: 'TCP 3306', protocol: 'TCP', portRange: '3306', cidr: '10.0.1.0/24', action: 'ALLOW' },
+              { ruleNumber: 110, type: 'All Traffic', protocol: 'All', portRange: 'All', cidr: '0.0.0.0/0', action: 'ALLOW' },
+              { ruleNumber: 32767, type: 'All Traffic', protocol: 'All', portRange: 'All', cidr: '0.0.0.0/0', action: 'DENY' }
+            ]
+          }
+        },
+        style: { width: 700, height: 200 },
+        draggable: false,
+        selectable: true,
+        zIndex: 0
+      },
+
+      // 5. Boundary: MySQL/Aurora Database Security Group
+      {
+        id: 'box-db-sg',
+        type: 'boundaryNode',
+        position: { x: 130, y: 320 },
+        data: {
+          label: 'MySQL/Aurora SG',
+          boundaryType: 'security_group',
+          width: 170,
+          height: 120,
+          allowedProtocols: ['SQL']
+        },
+        style: { width: 170, height: 120 },
+        draggable: false,
+        selectable: true,
+        zIndex: 1
+      },
+
+      // 6. External Web Client
+      {
+        id: 'node-client',
+        type: 'serviceNode',
+        position: { x: -170, y: 125 },
+        data: {
+          serviceId: 'user',
+          label: 'Client / Ingress',
+          category: 'Client / Ingress',
+          health: 'healthy',
+          az: 'Edge / Global',
+          subnet: 'global',
+          replicas: 1,
+          multiAz: false
+        }
+      },
+
+      // 6b. Internet Gateway (Inside Public Subnet)
+      {
+        id: 'node-igw',
+        type: 'serviceNode',
+        position: { x: 90, y: 125 },
+        data: {
+          serviceId: 'internet_gateway',
+          label: 'Internet Gateway',
+          category: 'Networking & Content Delivery',
+          health: 'healthy',
+          az: 'Edge / Global',
+          subnet: 'public',
+          replicas: 1,
+          multiAz: false
+        }
+      },
+
+      // 7. Service Node: Web Server (EC2) in Public Subnet
+      {
+        id: 'node-web-server',
+        type: 'serviceNode',
+        position: { x: 250, y: 125 },
+        data: {
+          serviceId: 'ec2',
+          label: 'Web Server',
+          category: 'Compute',
+          health: 'healthy',
+          az: 'AZ-A',
+          subnet: 'public',
+          replicas: 1,
+          multiAz: false,
+          securityGroupIds: ['box-web-sg'],
+          notes: 'Web Server SG: Inbound HTTP 0.0.0.0/0 Allow; Outbound MySQL/Aurora 10.0.2.0/24 Allow.'
+        }
+      },
+
+      // 8. Service Node: Database (RDS MySQL/Aurora) in Private Subnet
+      {
+        id: 'node-database',
+        type: 'serviceNode',
+        position: { x: 280, y: 345 },
+        data: {
+          serviceId: 'rds',
+          label: 'Database (Private Subnet)',
+          category: 'Databases',
+          health: 'healthy',
+          az: 'AZ-A',
+          subnet: 'private',
+          replicas: 1,
+          multiAz: false,
+          securityGroupIds: ['box-db-sg'],
+          notes: 'MySQL/Aurora SG: Inbound 10.0.1.0/24 TCP 3306 Allow. Responds to client ephemeral ports (1024-65535).'
+        }
+      }
+    ],
+    edges: [
+      // Ingress Edge 1: Client -> IGW
+      {
+        id: 'e-client-igw',
+        source: 'node-client',
+        target: 'node-igw',
+        type: 'custom',
+        data: {
+          protocol: 'HTTP',
+          stepNumber: 1,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 1500,
+          signalType: 'inbound_request'
+        }
+      },
+      // Ingress Edge 2: IGW -> Web Server
+      {
+        id: 'e-igw-web',
+        source: 'node-igw',
+        target: 'node-web-server',
+        type: 'custom',
+        data: {
+          protocol: 'HTTP',
+          stepNumber: 2,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 1500,
+          signalType: 'inbound_request',
+          signalLabel: 'HTTP Inbound (0.0.0.0/0)'
+        }
+      },
+      // 1. Incoming Signal: Inbound Request (Web Server -> Database on TCP 3306)
+      {
+        id: 'e-web-db-inbound',
+        source: 'node-web-server',
+        target: 'node-database',
+        type: 'custom',
+        data: {
+          protocol: 'SQL',
+          stepNumber: 2,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 3000,
+          signalType: 'inbound_request',
+          signalLabel: 'Connection Flow (Inbound Request)',
+          curveOffset: -40
+        }
+      },
+      // 2. Outgoing Signal: Outbound Response (Database -> Web Server on Ephemeral Ports)
+      {
+        id: 'e-db-web-outbound',
+        source: 'node-database',
+        target: 'node-web-server',
+        type: 'custom',
+        data: {
+          protocol: 'TCP',
+          stepNumber: 3,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 30000,
+          signalType: 'outbound_response',
+          hasMissingReturnBlock: true,
+          signalLabel: 'Connection Flow (Outbound Response - Blocked/Timed Out)',
+          curveOffset: -40
+        }
+      }
+    ]
+  },
+  {
     id: 'vpc-subnets-multi-az-security-groups',
     name: 'Multi-AZ VPC with Public & Private Subnets & Security Groups',
     category: 'Networking & VPC Design',
@@ -1493,7 +1761,7 @@ export const REFERENCE_ARCHITECTURES: ReferenceArchitecture[] = [
         type: 'serviceNode',
         position: { x: 550, y: 110 },
         data: {
-          serviceId: 'auto_scaling',
+          serviceId: 'ec2_auto_scaling',
           label: 'EC2 Auto Scaling Group',
           category: 'Compute',
           health: 'healthy',
@@ -1900,7 +2168,7 @@ export const REFERENCE_ARCHITECTURES: ReferenceArchitecture[] = [
         type: 'serviceNode',
         position: { x: 620, y: 120 },
         data: {
-          serviceId: 'auto_scaling',
+          serviceId: 'auto_scaling_mgmt',
           label: 'Service Auto Scaling (pets)',
           category: 'Management & Governance',
           health: 'healthy',
@@ -1947,7 +2215,7 @@ export const REFERENCE_ARCHITECTURES: ReferenceArchitecture[] = [
         type: 'serviceNode',
         position: { x: 620, y: 380 },
         data: {
-          serviceId: 'auto_scaling',
+          serviceId: 'auto_scaling_mgmt',
           label: 'Service Auto Scaling (foods)',
           category: 'Management & Governance',
           health: 'healthy',
@@ -2163,9 +2431,9 @@ export const REFERENCE_ARCHITECTURES: ReferenceArchitecture[] = [
         type: 'serviceNode',
         position: { x: 560, y: 180 },
         data: {
-          serviceId: 'auto_scaling',
+          serviceId: 'ec2_auto_scaling',
           label: 'EC2 Auto Scaling Group (min 2, max 6)',
-          category: 'Management & Governance',
+          category: 'Compute',
           health: 'healthy',
           az: 'Multi-AZ',
           subnet: 'private',
@@ -2441,5 +2709,652 @@ export const REFERENCE_ARCHITECTURES: ReferenceArchitecture[] = [
         data: { protocol: 'HTTPS', stepNumber: 4, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 3000 }
       }
     ]
+  },
+
+  {
+    id: 'thumbnail-generator',
+    name: 'Serverless Image Thumbnail Generator',
+    category: 'Serverless / Storage',
+    difficulty: 'Beginner',
+    description: 'Official AWS Event-Driven Pattern: AWS Management Console uploads photos to a Source S3 bucket, which emits an s3:ObjectCreated event notification to an AWS Lambda function inside a private VPC subnet. Armed with an IAM Execution Role, Lambda resizes the image and writes the thumbnail to a Destination S3 bucket via a VPC S3 Gateway Endpoint.',
+    learningOutcome: 'Demonstrates S3 asynchronous event triggers, isolated private VPC compute without public internet exposure, and high-performance zero-cost S3 routing via VPC Gateway Endpoints. Note: the IAM Execution Role node is shown for architectural completeness (a real deployment needs one) but is illustrative only - this simulator does not evaluate IAM permissions, so its presence or absence has no effect on the simulated request.',
+    nodes: [
+      // 1. Boundary: Region (us-east-1)
+      {
+        id: 'box-region',
+        type: 'boundaryNode',
+        position: { x: 40, y: 20 },
+        data: {
+          label: 'Region (us-east-1)',
+          boundaryType: 'region',
+          width: 980,
+          height: 480
+        },
+        style: { width: 980, height: 480 },
+        draggable: false,
+        selectable: true,
+        zIndex: -3
+      },
+
+      // 2. Boundary: VPC
+      {
+        id: 'box-vpc',
+        type: 'boundaryNode',
+        position: { x: 300, y: 60 },
+        data: {
+          label: 'VPC (10.0.0.0/16)',
+          boundaryType: 'vpc',
+          width: 460,
+          height: 400,
+          cidr: '10.0.0.0/16'
+        },
+        style: { width: 460, height: 400 },
+        draggable: false,
+        selectable: true,
+        zIndex: -2
+      },
+
+      // 3. Boundary: Availability Zone
+      {
+        id: 'box-az',
+        type: 'boundaryNode',
+        position: { x: 330, y: 100 },
+        data: {
+          label: 'Availability Zone (us-east-1a)',
+          boundaryType: 'az',
+          width: 400,
+          height: 330
+        },
+        style: { width: 400, height: 330 },
+        draggable: false,
+        selectable: true,
+        zIndex: -1
+      },
+
+      // 4. Boundary: Private Subnet
+      {
+        id: 'box-private-subnet',
+        type: 'boundaryNode',
+        position: { x: 350, y: 190 },
+        data: {
+          label: 'Private subnet (10.0.1.0/24)',
+          boundaryType: 'private_subnet',
+          width: 360,
+          height: 210,
+          cidr: '10.0.1.0/24'
+        },
+        style: { width: 360, height: 210 },
+        draggable: false,
+        selectable: true,
+        zIndex: 0
+      },
+
+      // --- Service Nodes ---
+
+      // Node: AWS Management Console (Client / Ingress)
+      {
+        id: 'node-console',
+        type: 'serviceNode',
+        position: { x: -160, y: 250 },
+        data: {
+          serviceId: 'user',
+          label: 'AWS Management Console',
+          category: 'Client / Ingress',
+          health: 'healthy',
+          az: 'Edge / Global',
+          subnet: 'global',
+          replicas: 1,
+          multiAz: false,
+          notes: 'Administrator or user uploads raw image assets into the source S3 bucket via the AWS Console.'
+        }
+      },
+
+      // Node: Source S3 Bucket (Storage)
+      {
+        id: 'node-s3-source',
+        type: 'serviceNode',
+        position: { x: 100, y: 250 },
+        data: {
+          serviceId: 's3',
+          label: 'Source bucket',
+          category: 'Storage',
+          health: 'healthy',
+          az: 'Global / Region',
+          subnet: 'global',
+          replicas: 1,
+          multiAz: true,
+          notes: 'Stores original uploaded images. Configured with an S3 event notification on s3:ObjectCreated:*.'
+        }
+      },
+
+      // Node: IAM Permissions Policy (Security)
+      {
+        id: 'node-iam',
+        type: 'serviceNode',
+        position: { x: 470, y: 120 },
+        data: {
+          serviceId: 'iam',
+          label: 'Permissions Policy',
+          category: 'Security, Identity & Compliance',
+          health: 'healthy',
+          az: 'Edge / Global',
+          subnet: 'global',
+          replicas: 1,
+          multiAz: true,
+          notes: 'IAM execution role granting Lambda s3:GetObject on the source bucket, s3:PutObject on the destination bucket, and AWSLambdaVPCAccessExecutionRole.'
+        }
+      },
+
+      // Node: Lambda (Create thumbnail function)
+      {
+        id: 'node-lambda',
+        type: 'serviceNode',
+        position: { x: 380, y: 250 },
+        data: {
+          serviceId: 'lambda',
+          label: 'Create thumbnail function',
+          category: 'Compute',
+          health: 'healthy',
+          az: 'AZ-A',
+          subnet: 'private',
+          replicas: 5,
+          multiAz: true,
+          notes: 'Serverless compute function running inside the private subnet. Automatically triggered by S3 event notifications.'
+        }
+      },
+
+      // Node: S3 Gateway Endpoint
+      {
+        id: 'node-s3-gateway',
+        type: 'serviceNode',
+        position: { x: 570, y: 250 },
+        data: {
+          serviceId: 's3_gateway_endpoint',
+          label: 'S3 Gateway Endpoint',
+          category: 'Networking & Content Delivery',
+          health: 'healthy',
+          az: 'AZ-A',
+          subnet: 'private',
+          replicas: 1,
+          multiAz: true,
+          notes: 'VPC Gateway route entry allowing private subnet compute to reach Amazon S3 over the AWS private network with zero NAT charges.'
+        }
+      },
+
+      // Node: Destination S3 Bucket (Storage)
+      {
+        id: 'node-s3-dest',
+        type: 'serviceNode',
+        position: { x: 840, y: 250 },
+        data: {
+          serviceId: 's3',
+          label: 'Destination bucket',
+          category: 'Storage',
+          health: 'healthy',
+          az: 'Global / Region',
+          subnet: 'global',
+          replicas: 1,
+          multiAz: true,
+          notes: 'Stores resized thumbnail images for low-latency distribution and client display.'
+        }
+      }
+    ],
+    edges: [
+      {
+        id: 'e-console-source',
+        source: 'node-console',
+        target: 'node-s3-source',
+        type: 'custom',
+        data: {
+          protocol: 'HTTPS',
+          stepNumber: 1,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 3000,
+          label: '1. Upload image'
+        }
+      },
+      {
+        id: 'e-source-lambda',
+        source: 'node-s3-source',
+        target: 'node-lambda',
+        type: 'custom',
+        data: {
+          protocol: 'Event',
+          stepNumber: 2,
+          interactionType: 'event',
+          isCriticalDependency: true,
+          timeoutMs: 5000,
+          label: '2. s3:ObjectCreated'
+        }
+      },
+      {
+        id: 'e-iam-lambda',
+        source: 'node-iam',
+        target: 'node-lambda',
+        type: 'custom',
+        data: {
+          protocol: 'HTTPS',
+          stepNumber: 0,
+          interactionType: 'synchronous',
+          isCriticalDependency: false,
+          timeoutMs: 1000,
+          label: 'IAM Execution Role'
+        }
+      },
+      {
+        id: 'e-lambda-endpoint',
+        source: 'node-lambda',
+        target: 'node-s3-gateway',
+        type: 'custom',
+        data: {
+          protocol: 'HTTPS',
+          stepNumber: 3,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 1000,
+          label: '3. VPC Gateway route'
+        }
+      },
+      {
+        id: 'e-endpoint-dest',
+        source: 'node-s3-gateway',
+        target: 'node-s3-dest',
+        type: 'custom',
+        data: {
+          protocol: 'Object access',
+          stepNumber: 4,
+          interactionType: 'synchronous',
+          isCriticalDependency: true,
+          timeoutMs: 2000,
+          label: '4. Save thumbnail'
+        }
+      }
+    ]
+  },
+
+  {
+    id: 'ecs-architecture-high-performance-image-processing',
+    name: 'ECS architecture for high-performance image processing',
+    category: 'Media / Image Processing',
+    difficulty: 'Advanced',
+    description: 'Official AWS "Dynamic Image Transformation for Amazon CloudFront" ECS-based reference architecture: CloudFront + ALB + ECS Fargate perform on-the-fly image transforms backed by S3, DynamoDB and Rekognition, alongside a serverless Admin API (API Gateway + Lambda + Cognito + Secrets Manager) and a static Web Portal (CloudFront + Amplify + S3). Source: https://docs.aws.amazon.com/solutions/latest/dynamic-image-transformation-for-amazon-cloudfront/ecs-architecture.html',
+    learningOutcome: 'Shows how a high-throughput image processing tier is split from its control plane: the Fargate task in the public subnet is reached only through an internal ALB in an isolated subnet, and it egresses to S3/DynamoDB/Rekognition/external origins through the Internet Gateway rather than a NAT Gateway - while a separate Cognito-protected Admin API manages configuration independently of the hot request path.',
+    nodes: [
+      // 1. Boundary: Image Transformation Service
+      {
+        id: 'box-its',
+        type: 'boundaryNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'Image Transformation Service', boundaryType: 'account', width: 1010, height: 430 },
+        style: { width: 1010, height: 430 },
+        draggable: false,
+        selectable: true,
+        zIndex: -2
+      },
+      // 2. Boundary: VPC
+      {
+        id: 'box-vpc',
+        type: 'boundaryNode',
+        position: { x: 330, y: 90 },
+        data: { label: 'Amazon VPC', cidr: '10.40.0.0/16', boundaryType: 'vpc', width: 420, height: 270 },
+        style: { width: 420, height: 270 },
+        draggable: false,
+        selectable: true,
+        zIndex: -1
+      },
+      // 3. Boundary: Isolated Subnet (ALB)
+      {
+        id: 'box-isolated-subnet',
+        type: 'boundaryNode',
+        position: { x: 350, y: 150 },
+        data: { label: 'Isolated Subnet', cidr: '10.40.1.0/24', boundaryType: 'private_subnet', width: 160, height: 180 },
+        style: { width: 160, height: 180 },
+        draggable: false,
+        selectable: true,
+        zIndex: 0
+      },
+      // 4. Boundary: Public Subnet (ECS)
+      {
+        id: 'box-public-subnet',
+        type: 'boundaryNode',
+        position: { x: 570, y: 150 },
+        data: { label: 'Public Subnet', cidr: '10.40.2.0/24', boundaryType: 'public_subnet', width: 160, height: 180 },
+        style: { width: 160, height: 180 },
+        draggable: false,
+        selectable: true,
+        zIndex: 0
+      },
+      // 5. Boundary: Admin API
+      {
+        id: 'box-admin-api',
+        type: 'boundaryNode',
+        position: { x: 0, y: 470 },
+        data: { label: 'Admin API', boundaryType: 'account', width: 780, height: 190 },
+        style: { width: 780, height: 190 },
+        draggable: false,
+        selectable: true,
+        zIndex: -2
+      },
+      // 6. Boundary: Web Portal
+      {
+        id: 'box-web-portal',
+        type: 'boundaryNode',
+        position: { x: 0, y: 700 },
+        data: { label: 'Web Portal', boundaryType: 'account', width: 780, height: 190 },
+        style: { width: 780, height: 190 },
+        draggable: false,
+        selectable: true,
+        zIndex: -2
+      },
+
+      // --- Image Transformation Service nodes ---
+      {
+        id: 'node-client',
+        type: 'serviceNode',
+        position: { x: 20, y: 210 },
+        data: { serviceId: 'user', label: 'Client (using DIT for image transformations)', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false }
+      },
+      {
+        id: 'node-cloudfront-its',
+        type: 'serviceNode',
+        position: { x: 170, y: 210 },
+        data: { serviceId: 'cloudfront', label: 'Amazon CloudFront', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: true }
+      },
+      {
+        id: 'node-alb',
+        type: 'serviceNode',
+        position: { x: 385, y: 220 },
+        data: { serviceId: 'alb', label: 'AWS ALB', category: 'Networking & Content Delivery', health: 'healthy', az: 'Multi-AZ', subnet: 'isolated', replicas: 1, multiAz: true }
+      },
+      {
+        id: 'node-ecs',
+        type: 'serviceNode',
+        position: { x: 605, y: 220 },
+        data: { serviceId: 'ecs', customConfig: { ecs: { launchType: 'FARGATE', networkMode: 'awsvpc', desiredCount: 2, runningCount: 2 }, assignPublicIp: true }, label: 'Amazon ECS (Fargate tasks)', category: 'Compute', health: 'healthy', az: 'Multi-AZ', subnet: 'public', replicas: 2, multiAz: true }
+      },
+      {
+        id: 'node-ecr',
+        type: 'serviceNode',
+        position: { x: 630, y: 20 },
+        data: { serviceId: 'ecr', label: 'Amazon ECR', category: 'Containers', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Image pull at task launch - not a request-path dependency.' }
+      },
+      {
+        id: 'node-igw',
+        type: 'serviceNode',
+        position: { x: 790, y: 110 },
+        data: { serviceId: 'internet_gateway', label: 'Internet Gateway', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'public', replicas: 1, multiAz: false }
+      },
+      {
+        id: 'node-dynamodb-its',
+        type: 'serviceNode',
+        position: { x: 900, y: 30 },
+        data: { serviceId: 'dynamodb', label: 'Amazon DynamoDB', category: 'Databases', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Image transformation config table.' }
+      },
+      {
+        id: 'node-rekognition',
+        type: 'serviceNode',
+        position: { x: 900, y: 130 },
+        data: { serviceId: 'rekognition', label: 'Amazon Rekognition', category: 'Machine Learning & AI', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Smart-crop face/object detection.' }
+      },
+      {
+        id: 'node-s3-its',
+        type: 'serviceNode',
+        position: { x: 900, y: 230 },
+        data: { serviceId: 's3', label: 'Amazon S3', category: 'Storage', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Source image bucket.' }
+      },
+      {
+        id: 'node-external-domain',
+        type: 'serviceNode',
+        position: { x: 900, y: 330 },
+        data: { serviceId: 'api_client', label: 'External Domain', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false, notes: 'Optional custom/external image source origin.' }
+      },
+
+      // --- Admin API nodes ---
+      {
+        id: 'node-admin',
+        type: 'serviceNode',
+        position: { x: 20, y: 620 },
+        data: { serviceId: 'user', label: 'Admin', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false }
+      },
+      {
+        id: 'node-dit-client',
+        type: 'serviceNode',
+        position: { x: 150, y: 620 },
+        data: { serviceId: 'client_ui', label: 'DIT web client', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false }
+      },
+      {
+        id: 'node-api-gateway',
+        type: 'serviceNode',
+        position: { x: 300, y: 540 },
+        data: { serviceId: 'api_gateway', label: 'Amazon API Gateway', category: 'Networking & Content Delivery', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true }
+      },
+      {
+        id: 'node-lambda-admin',
+        type: 'serviceNode',
+        position: { x: 450, y: 540 },
+        data: { serviceId: 'lambda', label: 'AWS Lambda', category: 'Compute', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 2, multiAz: true }
+      },
+      {
+        id: 'node-dynamodb-admin',
+        type: 'serviceNode',
+        position: { x: 620, y: 480 },
+        data: { serviceId: 'dynamodb', label: 'Amazon DynamoDB', category: 'Databases', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Admin-managed configuration table.' }
+      },
+      {
+        id: 'node-secrets-manager',
+        type: 'serviceNode',
+        position: { x: 620, y: 590 },
+        data: { serviceId: 'secrets_manager', label: 'AWS Secrets Manager', category: 'Security, Identity & Compliance', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true }
+      },
+      {
+        id: 'node-cognito',
+        type: 'serviceNode',
+        position: { x: 300, y: 650 },
+        data: { serviceId: 'cognito', label: 'Amazon Cognito', category: 'Security, Identity & Compliance', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Authorizes both the Admin API and the Web Portal.' }
+      },
+
+      // --- Web Portal nodes ---
+      {
+        id: 'node-cloudfront-portal',
+        type: 'serviceNode',
+        position: { x: 150, y: 790 },
+        data: { serviceId: 'cloudfront', label: 'Amazon CloudFront', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: true }
+      },
+      {
+        id: 'node-amplify',
+        type: 'serviceNode',
+        position: { x: 300, y: 790 },
+        data: { serviceId: 'amplify', label: 'AWS Amplify', category: 'Frontend Web & Mobile', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true }
+      },
+      {
+        id: 'node-s3-portal',
+        type: 'serviceNode',
+        position: { x: 450, y: 790 },
+        data: { serviceId: 's3', label: 'Amazon S3', category: 'Storage', health: 'healthy', az: 'Multi-AZ', subnet: 'global', replicas: 1, multiAz: true, notes: 'Static web portal assets.' }
+      }
+    ],
+    edges: [
+      // Image Transformation Service flow
+      {
+        id: 'e-client-cf-its',
+        source: 'node-client',
+        target: 'node-cloudfront-its',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 1, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1000, label: '1. Image request' }
+      },
+      {
+        id: 'e-cf-alb',
+        source: 'node-cloudfront-its',
+        target: 'node-alb',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 2, interactionType: 'cached', isCriticalDependency: true, timeoutMs: 1500, label: '2. Cache miss origin fetch' }
+      },
+      {
+        id: 'e-alb-ecs',
+        source: 'node-alb',
+        target: 'node-ecs',
+        type: 'custom',
+        data: { protocol: 'HTTP', stepNumber: 3, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 2000, label: '3a. Route to Fargate task' }
+      },
+      {
+        id: 'e-ecr-ecs',
+        source: 'node-ecs',
+        target: 'node-ecr',
+        type: 'custom',
+        data: { protocol: 'HTTPS', interactionType: 'synchronous', isCriticalDependency: false, timeoutMs: 3000, label: 'Container image pull' }
+      },
+      {
+        id: 'e-ecs-igw',
+        source: 'node-ecs',
+        target: 'node-igw',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 3, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 2000, label: '3b. Egress for source fetch' }
+      },
+      {
+        id: 'e-igw-s3-its',
+        source: 'node-igw',
+        target: 'node-s3-its',
+        type: 'custom',
+        data: { protocol: 'Object access', stepNumber: 4, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 2000, label: '4a. Fetch source image' }
+      },
+      {
+        id: 'e-igw-external',
+        source: 'node-igw',
+        target: 'node-external-domain',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 4, interactionType: 'synchronous', isCriticalDependency: false, timeoutMs: 2500, label: '4b. Fetch from external origin' }
+      },
+      {
+        id: 'e-igw-dynamodb-its',
+        source: 'node-igw',
+        target: 'node-dynamodb-its',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 5, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, label: '5a. Read transform config' }
+      },
+      {
+        id: 'e-igw-rekognition',
+        source: 'node-igw',
+        target: 'node-rekognition',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 5, interactionType: 'synchronous', isCriticalDependency: false, timeoutMs: 2000, label: '5b. Smart crop detection' }
+      },
+
+      // Admin API flow
+      {
+        id: 'e-admin-dit',
+        source: 'node-admin',
+        target: 'node-dit-client',
+        type: 'custom',
+        data: { protocol: 'HTTPS', interactionType: 'synchronous', isCriticalDependency: false, timeoutMs: 1000, label: 'Admin browser session' }
+      },
+      {
+        id: 'e-dit-apigw',
+        source: 'node-dit-client',
+        target: 'node-api-gateway',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 4, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, label: '4a. Config API call' }
+      },
+      {
+        id: 'e-apigw-cognito',
+        source: 'node-api-gateway',
+        target: 'node-cognito',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 4, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, label: '4b. Authorize request' }
+      },
+      {
+        id: 'e-apigw-lambda',
+        source: 'node-api-gateway',
+        target: 'node-lambda-admin',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 5, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 2000, label: '5. Invoke' }
+      },
+      {
+        id: 'e-lambda-dynamodb-admin',
+        source: 'node-lambda-admin',
+        target: 'node-dynamodb-admin',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 6, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, label: '6. Read/write config' }
+      },
+      {
+        id: 'e-lambda-secrets',
+        source: 'node-lambda-admin',
+        target: 'node-secrets-manager',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 7, interactionType: 'synchronous', isCriticalDependency: false, timeoutMs: 1500, label: '7. Get secret' }
+      },
+
+      // Web Portal flow
+      {
+        id: 'e-dit-cf-portal',
+        source: 'node-dit-client',
+        target: 'node-cloudfront-portal',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 1, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1000, label: '1. Portal request' }
+      },
+      {
+        id: 'e-cf-amplify',
+        source: 'node-cloudfront-portal',
+        target: 'node-amplify',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 2, interactionType: 'cached', isCriticalDependency: true, timeoutMs: 1500, label: '2a. Cache miss origin fetch' }
+      },
+      {
+        id: 'e-amplify-s3-portal',
+        source: 'node-amplify',
+        target: 'node-s3-portal',
+        type: 'custom',
+        data: { protocol: 'Object access', stepNumber: 2, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, label: '2b. Serve static asset' }
+      },
+      {
+        id: 'e-amplify-cognito',
+        source: 'node-cloudfront-portal',
+        target: 'node-cognito',
+        type: 'custom',
+        data: { protocol: 'HTTPS', stepNumber: 3, interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, label: '3. Authenticate user' }
+      }
+    ]
   }
 ];
+
+// Explicit educational request paths: auxiliary arrows remain visible but do not pretend
+// to be sequential HTTP forwarding. Full DIT policy/authentication workflows are not modeled.
+const dit = REFERENCE_ARCHITECTURES.find(a => a.id === 'ecs-architecture-high-performance-image-processing')!;
+const auxiliary = new Set(['e-ecr-ecs', 'e-igw-external', 'e-igw-dynamodb-its', 'e-igw-rekognition', 'e-apigw-cognito', 'e-lambda-secrets', 'e-amplify-cognito']);
+for (const edge of dit.edges) if (auxiliary.has(edge.id)) edge.data = { ...edge.data, traversal: 'dependency' };
+dit.edges.push({ id: 'e-ecs-admin-config', source: 'node-ecs', target: 'node-dynamodb-admin', type: 'custom', data: { protocol: 'HTTPS', interactionType: 'synchronous', isCriticalDependency: true, timeoutMs: 1500, traversal: 'dependency', dependencyRequired: true, action: 'dynamodb:GetItem', label: 'Read transformation policies' } });
+const resources: Record<string, string> = {
+  'node-s3-its': 'arn:aws:s3:::dit-source/example.jpg',
+  'node-dynamodb-admin': 'arn:aws:dynamodb:us-east-1:000000000000:table/dit-policies',
+  'node-dynamodb-its': 'arn:aws:dynamodb:us-east-1:000000000000:table/dit-detections',
+  'node-secrets-manager': 'arn:aws:secretsmanager:us-east-1:000000000000:secret:dit-origin'
+};
+for (const node of dit.nodes) {
+  if (resources[node.id]) node.data.customConfig = { ...node.data.customConfig, resourceArn: resources[node.id] };
+  if (node.data.serviceId === 'cloudfront') node.data.customConfig = { ...node.data.customConfig, cacheState: 'miss' };
+  if (node.id === 'node-ecs' || node.id === 'node-lambda-admin') {
+    const ecs = node.id === 'node-ecs';
+    node.data.iamRole = {
+      id: ecs ? 'dit-task-role' : 'dit-admin-role',
+      trustPolicy: { id: 'trust', kind: 'trust', statements: [{ effect: 'Allow', principals: [ecs ? 'ecs-tasks.amazonaws.com' : 'lambda'], actions: ['sts:AssumeRole'], resources: ['*'] }] },
+      identityPolicies: [{ id: 'dit-access', kind: 'identity', statements: ecs
+        ? [{ effect: 'Allow', actions: ['s3:GetObject'], resources: [resources['node-s3-its']] }, { effect: 'Allow', actions: ['dynamodb:GetItem'], resources: [resources['node-dynamodb-admin'], resources['node-dynamodb-its']] }]
+        : [{ effect: 'Allow', actions: ['dynamodb:GetItem', 'dynamodb:PutItem'], resources: [resources['node-dynamodb-admin']] }, { effect: 'Allow', actions: ['secretsmanager:GetSecretValue'], resources: [resources['node-secrets-manager']] }] }]
+    };
+  }
+}
+dit.description += ' Partial educational model: default image flow fetches S3; dependency arrows show unexecuted startup, policy, authentication and optional analysis operations. No actual image transformation is performed.';
+for (const [id, label, allowedProtocols] of [
+  ['dit-alb-sg', 'DIT ALB security group', ['HTTPS']],
+  ['dit-task-sg', 'DIT task security group', ['HTTP']]
+] as const) dit.nodes.push({ id, type: 'boundaryNode', position: { x: 1050, y: id === 'dit-alb-sg' ? 100 : 240 }, data: { label, boundaryType: 'security_group', width: 220, height: 100, allowedProtocols: [...allowedProtocols] }, style: { width: 220, height: 100 } });
+const ditAlb = dit.nodes.find(n => n.id === 'node-alb')!;
+ditAlb.data.securityGroupIds = ['dit-alb-sg'];
+ditAlb.data.customConfig = { scheme: 'internal' };
+dit.nodes.find(n => n.id === 'node-ecs')!.data.securityGroupIds = ['dit-task-sg'];
+dit.nodes.find(n => n.id === 'node-cloudfront-its')!.data.customConfig.vpcOriginId = 'node-alb';
+// Canvas containment currently represents isolated subnet boundaries as private_subnet.
+// Preserve the isolated label; do not invent a distinct geometry-derived subnet type.
+ditAlb.data.subnet = 'private';
+// An IGW attaches to the VPC, not to an individual public subnet.
+dit.nodes.find(n => n.id === 'node-igw')!.data.subnet = 'global';

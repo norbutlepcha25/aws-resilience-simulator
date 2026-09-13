@@ -253,7 +253,7 @@ export function analyzeArchitecture(
   const finalScale = clamp(scaleScore);
   const finalSec = clamp(secScore);
 
-  const averageScore = (finalAvail + finalRes + finalFt + finalScale) / 4;
+  const averageScore = (finalAvail + finalRes + finalFt + finalScale + finalSec) / 5;
   let overallRating: 'Resilient' | 'Moderate' | 'Fragile' | 'Incomplete' = 'Moderate';
 
   if (nodes.length < 3) {

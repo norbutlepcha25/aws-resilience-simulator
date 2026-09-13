@@ -1,4 +1,6 @@
+import { supportsSecurityGroupAttachment } from '../../engine/network/securityGroupAttachment.ts';
 import React, { useState } from 'react';
+import { EcsConfigurationPanel } from './EcsConfigurationPanel.tsx';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
 import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
 import { AvailabilityZone, SubnetType, ProtocolType } from '../../types/index.ts';
@@ -65,7 +67,9 @@ export const ServiceInspector: React.FC = () => {
     edges,
     simulationResult,
     activeStepIndex,
-    setActiveStepIndex
+    setActiveStepIndex,
+    hasCustomNacl,
+    setShowNaclSideColumn
   } = useArchitecture();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'config' | 'learn'>('overview');
@@ -95,12 +99,24 @@ export const ServiceInspector: React.FC = () => {
               <span>{targetNode?.data.label || 'Target'}</span>
             </div>
           </div>
-          <button
-            onClick={() => setSelectedEdgeId(null)}
-            className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {hasCustomNacl && (
+              <button
+                onClick={() => setShowNaclSideColumn(true)}
+                className="text-[10px] font-bold px-2 py-1 rounded bg-circuit-50 hover:bg-circuit-100 text-circuit-700 border border-circuit-200 flex items-center gap-1 transition-colors cursor-pointer"
+                title="Open NACL Details & Rules"
+              >
+                <Shield className="w-3 h-3 text-circuit-600" />
+                <span>NACL Rules</span>
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedEdgeId(null)}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Edge Body */}
@@ -109,18 +125,18 @@ export const ServiceInspector: React.FC = () => {
           <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 shadow-xs space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                <Route className="w-3.5 h-3.5 text-blue-600" />
+                <Route className="w-3.5 h-3.5 text-circuit-600" />
                 <span>Flow of Task</span>
               </div>
               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                 (selectedEdge.data as any)?.flowStatus === 'active'
-                  ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-300'
+                  ? 'bg-circuit-100 text-circuit-800 ring-2 ring-circuit-300'
                   : (selectedEdge.data as any)?.flowStatus === 'failed'
                   ? 'bg-rose-100 text-rose-800 ring-2 ring-rose-300'
                   : (selectedEdge.data as any)?.flowStatus === 'completed'
                   ? 'bg-emerald-100 text-emerald-800'
                   : (selectedEdge.data as any)?.flowStatus === 'pending'
-                  ? 'bg-sky-100 text-sky-800'
+                  ? 'bg-circuit-100 text-circuit-800'
                   : 'bg-slate-100 text-slate-600'
               }`}>
                 {((selectedEdge.data as any)?.flowStatus || 'idle').toUpperCase()}
@@ -163,7 +179,7 @@ export const ServiceInspector: React.FC = () => {
             {(selectedEdge.data as any)?.flowStepIndex !== undefined && (
               <button
                 onClick={() => setActiveStepIndex((selectedEdge.data as any).flowStepIndex)}
-                className="w-full mt-1.5 py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                className="w-full mt-1.5 py-1.5 px-3 rounded-lg bg-circuit-600 hover:bg-circuit-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
                 <Activity className="w-3.5 h-3.5" />
                 <span>Jump to This Step on Timeline</span>
@@ -183,7 +199,7 @@ export const ServiceInspector: React.FC = () => {
               value={(selectedEdge.data as any)?.stepNumber || ''}
               onChange={(e) => updateEdgeData(selectedEdge.id, { stepNumber: e.target.value ? Number(e.target.value) : undefined } as any)}
               placeholder="e.g. 1, 2, 3..."
-              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
+              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
             />
           </div>
 
@@ -195,7 +211,7 @@ export const ServiceInspector: React.FC = () => {
             <select
               value={edgeData.protocol}
               onChange={(e) => updateEdgeData(selectedEdge.id, { protocol: e.target.value as ProtocolType })}
-              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
+              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
             >
               <option value="HTTPS">HTTPS (Encrypted Web Traffic)</option>
               <option value="HTTP">HTTP (Unencrypted Web Traffic)</option>
@@ -216,7 +232,7 @@ export const ServiceInspector: React.FC = () => {
             <select
               value={edgeData.interactionType}
               onChange={(e) => updateEdgeData(selectedEdge.id, { interactionType: e.target.value as any })}
-              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600"
+              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600"
             >
               <option value="synchronous">Synchronous (Blocking - Caller waits)</option>
               <option value="asynchronous">Asynchronous (Decoupled buffer)</option>
@@ -227,7 +243,7 @@ export const ServiceInspector: React.FC = () => {
           {/* Educational Callout */}
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
             <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+              <BookOpen className="w-3.5 h-3.5 text-circuit-600" />
               Architectural Concept
             </div>
             <p className="leading-relaxed text-[11px]">
@@ -451,7 +467,7 @@ export const ServiceInspector: React.FC = () => {
               type="text"
               value={label}
               onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value } as any)}
-              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-sans"
+              className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-sans"
             />
           </div>
 
@@ -467,7 +483,7 @@ export const ServiceInspector: React.FC = () => {
                 value={cidr || config.defaultCidr || ''}
                 onChange={(e) => updateNodeData(selectedNode.id, { cidr: e.target.value } as any)}
                 placeholder={config.defaultCidr || 'e.g. 10.0.0.0/16'}
-                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
+                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
               />
               <p className="text-[10px] text-slate-400 mt-1">
                 Allocates private RFC 1918 address space. Public/Private subnet boundaries drawn inside this VPC automatically split this block between them.
@@ -533,7 +549,7 @@ export const ServiceInspector: React.FC = () => {
                         bData.reservedAddresses.map((res: any, idx: number) => (
                           <div key={idx} className="p-1.5 rounded-lg bg-white border border-slate-200 text-[10px]">
                             <div className="flex items-center justify-between font-mono">
-                              <span className="font-bold text-blue-700">{res.ip}</span>
+                              <span className="font-bold text-circuit-700">{res.ip}</span>
                               <span className="text-[9px] font-sans font-semibold text-slate-600 uppercase">{res.role}</span>
                             </div>
                             <div className="text-slate-500 text-[9px] mt-0.5 leading-tight">{res.description}</div>
@@ -552,8 +568,7 @@ export const ServiceInspector: React.FC = () => {
           )}
 
           {/* Network ACL - one per subnet in real AWS, governing every resource inside it.
-              Stateless: only needs an explicit DENY rule to block traffic (everything else is
-              allowed), unlike a Security Group's allow-list. */}
+              The protocol deny-list below is a simplified control, not the full AWS rule table. */}
           {['public_subnet', 'private_subnet'].includes(boundaryType) && (() => {
             const denyList: string[] = bData.naclDenyInbound || [];
             const isRestricted = bData.naclDenyInbound !== undefined;
@@ -575,8 +590,10 @@ export const ServiceInspector: React.FC = () => {
             return (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Network ACL
+                  Network ACL — subnet association
                 </label>
+                {bData.customNacl && <button onClick={() => setShowNaclSideColumn(true)} className="text-xs text-circuit-700 underline mb-2">View NACL Rules</button>}
+                <p className="text-[10px] text-slate-500 mb-2">Applies to this subnet. AWS NACLs are stateless and evaluate numbered allow/deny rules in order. This protocol control is simplified.</p>
                 <label className="flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer mb-1.5">
                   <input type="checkbox" checked={isRestricted} onChange={(e) => setRestricted(e.target.checked)} className="w-3 h-3" />
                   Add explicit DENY rules
@@ -662,7 +679,7 @@ export const ServiceInspector: React.FC = () => {
                             key={proto}
                             onClick={() => toggleProtocol(proto)}
                             className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
-                              active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-blue-400'
+                              active ? 'bg-circuit-600 border-circuit-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-circuit-400'
                             }`}
                           >
                             {proto}
@@ -880,7 +897,7 @@ export const ServiceInspector: React.FC = () => {
                   <button
                     key={cs.id}
                     onClick={() => setSelectedNodeId(cs.id)}
-                    className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-left transition-colors"
+                    className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-circuit-50 border border-slate-200 hover:border-circuit-200 text-left transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <AwsServiceIcon serviceId={cs.data?.serviceId} size={22} />
@@ -900,7 +917,7 @@ export const ServiceInspector: React.FC = () => {
           {/* Architectural Notes */}
           <div className="space-y-2">
             <div className="font-bold text-slate-800 uppercase tracking-wider text-[10px] flex items-center gap-1">
-              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+              <BookOpen className="w-3.5 h-3.5 text-circuit-600" />
               AWS Architecture Guide
             </div>
             <div className="space-y-1.5">
@@ -1057,6 +1074,7 @@ export const ServiceInspector: React.FC = () => {
           >
             Teaching Notes
           </button>
+
         </div>
       </div>
 
@@ -1162,10 +1180,10 @@ export const ServiceInspector: React.FC = () => {
             {(() => {
               const nodeCost = calculateNodeCost(selectedNode);
               return (
-                <div className="p-3 rounded-xl border border-blue-200 bg-blue-50/40 space-y-1.5">
+                <div className="p-3 rounded-xl border border-circuit-200 bg-circuit-50/40 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 text-blue-600" />
+                      <DollarSign className="w-3 h-3 text-circuit-600" />
                       AWS Estimated Cost
                     </span>
                     {nodeCost.freeTierEligible && (
@@ -1203,7 +1221,7 @@ export const ServiceInspector: React.FC = () => {
                 type="text"
                 value={nodeData.label}
                 onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600"
+                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600"
               />
             </div>
 
@@ -1215,7 +1233,7 @@ export const ServiceInspector: React.FC = () => {
               <select
                 value={nodeData.az}
                 onChange={(e) => updateNodeData(selectedNode.id, { az: e.target.value as AvailabilityZone })}
-                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
+                className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
               >
                 <option value="AZ-A">Availability Zone A (us-east-1a)</option>
                 <option value="AZ-B">Availability Zone B (us-east-1b)</option>
@@ -1235,8 +1253,8 @@ export const ServiceInspector: React.FC = () => {
               {(() => {
                 const subnetDisplay: Record<SubnetType, { text: string; className: string }> = {
                   public: { text: 'Public Subnet (Internet Gateway)', className: 'bg-emerald-50 border-emerald-300 text-emerald-800' },
-                  private: { text: 'Private Subnet (Internal only)', className: 'bg-blue-50 border-blue-300 text-blue-800' },
-                  isolated: { text: 'Isolated Data Subnet', className: 'bg-indigo-50 border-indigo-300 text-indigo-800' },
+                  private: { text: 'Private Subnet (Internal only)', className: 'bg-circuit-50 border-circuit-300 text-circuit-800' },
+                  isolated: { text: 'Isolated Data Subnet', className: 'bg-circuit-50 border-circuit-300 text-circuit-800' },
                   global: { text: 'Global Edge / Managed (outside any VPC)', className: 'bg-slate-100 border-slate-300 text-slate-700' },
                   unassigned: { text: 'Not inside any subnet - unreachable', className: 'bg-rose-50 border-rose-400 text-rose-700' }
                 };
@@ -1253,93 +1271,11 @@ export const ServiceInspector: React.FC = () => {
               </p>
             </div>
 
-            {/* Network ACL - unlike a Security Group, this is genuinely tied to the subnet in
-                real AWS: every subnet has exactly one NACL, and it governs every resource inside
-                it. So this isn't an attach/detach control - moving this node to a different
-                subnet (drag it on the canvas) is what changes which NACL applies; editing the
-                rule here edits that subnet's NACL directly, affecting every other resource in it
-                too, exactly like the real console. */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Network ACL
-              </label>
-              {(() => {
-                const subnetBoundary = findContainingSubnetBoundary(selectedNode as any, nodes.filter(n => n.type === 'boundaryNode') as any);
-
-                if (!subnetBoundary) {
-                  return (
-                    <p className="text-[10px] text-slate-400 italic px-0.5">
-                      Not inside any subnet, so no Network ACL applies. Place this node inside a Public/Private subnet boundary to give it one.
-                    </p>
-                  );
-                }
-
-                const denyList: string[] = (subnetBoundary.data as any).naclDenyInbound || [];
-                const isRestricted = (subnetBoundary.data as any).naclDenyInbound !== undefined;
-                const PROTOCOLS: ProtocolType[] = ['HTTP', 'HTTPS', 'SQL', 'DNS', 'gRPC', 'TCP', 'Event', 'Message', 'Object access'];
-
-                const setRestricted = (restrict: boolean) => {
-                  updateNodeData(subnetBoundary.id, { naclDenyInbound: restrict ? denyList : undefined } as any);
-                };
-                const toggleProtocol = (proto: string) => {
-                  const next = denyList.includes(proto) ? denyList.filter(p => p !== proto) : [...denyList, proto];
-                  updateNodeData(subnetBoundary.id, { naclDenyInbound: next } as any);
-                };
-
-                return (
-                  <div className="p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-800 truncate">{(subnetBoundary.data as any).label || 'Subnet'}</span>
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">stateless</span>
-                    </div>
-
-                    <label className="flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer">
-                      <input type="checkbox" checked={isRestricted} onChange={(e) => setRestricted(e.target.checked)} className="w-3 h-3" />
-                      Add explicit DENY rules
-                    </label>
-
-                    {!isRestricted ? (
-                      <p className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
-                        Default rule: allows all traffic (no DENY rules configured).
-                      </p>
-                    ) : (
-                      <>
-                        <p className="text-[10px] text-slate-400">DENY these inbound protocols (everything else is allowed):</p>
-                        <div className="flex flex-wrap gap-1">
-                          {PROTOCOLS.map(proto => {
-                            const active = denyList.includes(proto);
-                            return (
-                              <button
-                                key={proto}
-                                onClick={() => toggleProtocol(proto)}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
-                                  active ? 'bg-rose-600 border-rose-600 text-white' : 'bg-white border-slate-300 text-slate-500 hover:border-rose-400'
-                                }`}
-                              >
-                                {proto}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {denyList.length === 0 && (
-                          <p className="text-[10px] text-slate-400">No DENY rules yet - currently equivalent to allowing everything.</p>
-                        )}
-                      </>
-                    )}
-
-                    <p className="text-[10px] text-slate-400">
-                      Applies to every resource in {(subnetBoundary.data as any).label || 'this subnet'}, not just this one.
-                    </p>
-                  </div>
-                );
-              })()}
-            </div>
-
             {/* Security Groups - attached by explicit reference, exactly like a real AWS
                 instance's Security tab. Unlike the subnet above, this has nothing to do with
                 where the node sits on the canvas: attach or detach any Security Group here, and
                 edit its rules directly - changes apply everywhere that group is attached. */}
-            <div>
+            {supportsSecurityGroupAttachment(nodeData) && <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-slate-500" />
                 Security Groups
@@ -1374,7 +1310,7 @@ export const ServiceInspector: React.FC = () => {
                   <div className="space-y-2">
                     {attachedGroups.length === 0 && (
                       <p className="text-[10px] text-slate-400 italic px-0.5">
-                        No Security Group attached - all inbound traffic is unrestricted, same as a fresh AWS resource with the default group.
+                        No Security Group attached in this model. AWS EC2 uses a default group when none is specified; its default inbound rules do not allow unrestricted access.
                       </p>
                     )}
 
@@ -1432,8 +1368,8 @@ export const ServiceInspector: React.FC = () => {
                                       onClick={() => toggleProtocol(proto)}
                                       className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
                                         active
-                                          ? 'bg-blue-600 border-blue-600 text-white'
-                                          : 'bg-white border-slate-300 text-slate-500 hover:border-blue-400'
+                                          ? 'bg-circuit-600 border-circuit-600 text-white'
+                                          : 'bg-white border-slate-300 text-slate-500 hover:border-circuit-400'
                                       }`}
                                     >
                                       {proto}
@@ -1453,7 +1389,7 @@ export const ServiceInspector: React.FC = () => {
                     <div className="relative">
                       <button
                         onClick={() => setShowAttachSgMenu(v => !v)}
-                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-dashed border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-dashed border-slate-300 text-slate-600 hover:border-circuit-400 hover:text-circuit-600 transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Attach Security Group
@@ -1473,7 +1409,7 @@ export const ServiceInspector: React.FC = () => {
                           {availableToAttach.length > 0 && <div className="my-1 border-t border-slate-100" />}
                           <button
                             onClick={createAndAttach}
-                            className="w-full text-left px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                            className="w-full text-left px-3 py-1.5 text-xs font-medium text-circuit-600 hover:bg-circuit-50"
                           >
                             + Create new Security Group
                           </button>
@@ -1483,13 +1419,13 @@ export const ServiceInspector: React.FC = () => {
                   </div>
                 );
               })()}
-            </div>
+            </div>}
 
             {/* Replicas Slider */}
             <div>
               <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
                 <span>Task / Instance Replicas</span>
-                <span className="font-mono text-blue-600 font-bold">{nodeData.replicas || 1}</span>
+                <span className="font-mono text-circuit-600 font-bold">{nodeData.replicas || 1}</span>
               </div>
               <input
                 type="range"
@@ -1497,7 +1433,7 @@ export const ServiceInspector: React.FC = () => {
                 max="10"
                 value={nodeData.replicas || 1}
                 onChange={(e) => updateNodeData(selectedNode.id, { replicas: Number(e.target.value) })}
-                className="w-full accent-blue-600"
+                className="w-full accent-circuit-600"
               />
             </div>
 
@@ -1508,7 +1444,7 @@ export const ServiceInspector: React.FC = () => {
                   type="checkbox"
                   checked={!!nodeData.multiAz}
                   onChange={(e) => updateNodeData(selectedNode.id, { multiAz: e.target.checked })}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-slate-300 text-circuit-600 focus:ring-circuit-500"
                 />
                 <span className="text-xs font-semibold text-slate-800">
                   Multi-AZ Synchronous Hot Standby
@@ -1519,6 +1455,7 @@ export const ServiceInspector: React.FC = () => {
             {/* ---------------------------------------------------- */}
             {/* SERVICE-SPECIFIC AWS CONFIGURATION (EC2, S3, RDS, etc.) */}
             {/* ---------------------------------------------------- */}
+            {nodeData.serviceId === 'ecs' && <EcsConfigurationPanel data={nodeData} onChange={(customConfig) => updateNodeData(selectedNode.id, { customConfig })} />}
             {nodeData.serviceId === 'ec2' && (
               <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 border-b border-slate-200 pb-2">
@@ -1536,7 +1473,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, osImage: e.target.value }
                     } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-sans"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-sans"
                   >
                     {EC2_OS_IMAGES.map(img => (
                       <option key={img.id} value={img.id}>{img.label}</option>
@@ -1554,7 +1491,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, instanceType: e.target.value }
                     } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
                   >
                     {['General Purpose', 'Compute Optimized', 'Memory Optimized', 'Accelerated / GPU'].map(family => (
                       <optgroup key={family} label={family}>
@@ -1580,7 +1517,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, purchasingOption: e.target.value }
                     } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 text-xs"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 text-xs"
                   >
                     <option value="on_demand">On-Demand (Standard hourly)</option>
                     <option value="savings_plan_1yr">Compute Savings Plan 1-Yr (~35% discount)</option>
@@ -1596,7 +1533,7 @@ export const ServiceInspector: React.FC = () => {
                       <HardDrive className="w-3.5 h-3.5 text-slate-500" />
                       EBS Volume Storage
                     </span>
-                    <span className="font-mono text-blue-600 font-bold">
+                    <span className="font-mono text-circuit-600 font-bold">
                       {nodeData.customConfig?.ebsVolumeSizeGb || 30} GB
                     </span>
                   </div>
@@ -1653,7 +1590,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, storageClass: e.target.value }
                     } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-blue-600 font-sans"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-sans"
                   >
                     {Object.entries(S3_STORAGE_CLASSES).map(([k, def]) => (
                       <option key={k} value={k}>{def.label} — {def.desc}</option>
@@ -1665,7 +1602,7 @@ export const ServiceInspector: React.FC = () => {
                 <div>
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
                     <span>Stored Data Capacity</span>
-                    <span className="font-mono text-blue-600 font-bold">
+                    <span className="font-mono text-circuit-600 font-bold">
                       {(nodeData.customConfig?.storageGb || 50) >= 1000
                         ? `${((nodeData.customConfig?.storageGb || 50) / 1000).toFixed(1)} TB`
                         : `${nodeData.customConfig?.storageGb || 50} GB`}
@@ -1680,7 +1617,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, storageGb: Number(e.target.value) }
                     } as any)}
-                    className="w-full accent-blue-600"
+                    className="w-full accent-circuit-600"
                   />
                   <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-0.5">
                     <span>5 GB</span>
@@ -1698,7 +1635,7 @@ export const ServiceInspector: React.FC = () => {
                       onChange={(e) => updateNodeData(selectedNode.id, {
                         customConfig: { ...nodeData.customConfig, versioning: e.target.checked }
                       } as any)}
-                      className="rounded border-slate-300 text-blue-600"
+                      className="rounded border-slate-300 text-circuit-600"
                     />
                     <span>Bucket Versioning Enabled</span>
                   </label>
@@ -1710,7 +1647,7 @@ export const ServiceInspector: React.FC = () => {
                       onChange={(e) => updateNodeData(selectedNode.id, {
                         customConfig: { ...nodeData.customConfig, blockPublicAccess: e.target.checked }
                       } as any)}
-                      className="rounded border-slate-300 text-blue-600"
+                      className="rounded border-slate-300 text-circuit-600"
                     />
                     <span>Block All Public Access (AWS Default)</span>
                   </label>
@@ -1770,7 +1707,7 @@ export const ServiceInspector: React.FC = () => {
                 <div>
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
                     <span>Allocated Storage (gp3)</span>
-                    <span className="font-mono text-blue-600 font-bold">
+                    <span className="font-mono text-circuit-600 font-bold">
                       {nodeData.customConfig?.storageGb || 50} GB
                     </span>
                   </div>
@@ -1783,7 +1720,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, storageGb: Number(e.target.value) }
                     } as any)}
-                    className="w-full accent-blue-600"
+                    className="w-full accent-circuit-600"
                   />
                 </div>
               </div>
@@ -1810,7 +1747,7 @@ export const ServiceInspector: React.FC = () => {
                       } as any)}
                       className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
                         (nodeData.customConfig?.architecture || 'arm64') === 'arm64'
-                          ? 'bg-blue-50 border-blue-500 text-blue-800'
+                          ? 'bg-circuit-50 border-circuit-500 text-circuit-800'
                           : 'bg-white border-slate-200 text-slate-600'
                       }`}
                     >
@@ -1823,7 +1760,7 @@ export const ServiceInspector: React.FC = () => {
                       } as any)}
                       className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
                         nodeData.customConfig?.architecture === 'x86_64'
-                          ? 'bg-blue-50 border-blue-500 text-blue-800'
+                          ? 'bg-circuit-50 border-circuit-500 text-circuit-800'
                           : 'bg-white border-slate-200 text-slate-600'
                       }`}
                     >
@@ -1846,7 +1783,7 @@ export const ServiceInspector: React.FC = () => {
                     onChange={(e) => updateNodeData(selectedNode.id, {
                       customConfig: { ...nodeData.customConfig, memoryMb: Number(e.target.value) }
                     } as any)}
-                    className="w-full accent-blue-600"
+                    className="w-full accent-circuit-600"
                   />
                 </div>
               </div>
@@ -1858,10 +1795,10 @@ export const ServiceInspector: React.FC = () => {
             {(() => {
               const nodeCost = calculateNodeCost(selectedNode);
               return (
-                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5">
+                <div className="p-3.5 rounded-xl border border-circuit-200 bg-circuit-50/40 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                      <DollarSign className="w-4 h-4 text-blue-600" />
+                      <DollarSign className="w-4 h-4 text-circuit-600" />
                       <span>AWS Estimated Resource Cost</span>
                     </div>
                     {nodeCost.freeTierEligible && (
@@ -1871,7 +1808,7 @@ export const ServiceInspector: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex items-baseline justify-between pt-1 border-b border-blue-100 pb-2">
+                  <div className="flex items-baseline justify-between pt-1 border-b border-circuit-100 pb-2">
                     <div>
                       <div className="text-xl font-bold font-mono text-slate-900">
                         ${nodeCost.monthlyCost.toFixed(2)}
@@ -1881,7 +1818,7 @@ export const ServiceInspector: React.FC = () => {
                         ≈ ${nodeCost.hourlyCost.toFixed(4)} / hour
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 font-semibold truncate max-w-[140px]">
+                    <span className="text-[10px] font-mono text-circuit-700 bg-white px-2 py-0.5 rounded border border-circuit-200 font-semibold truncate max-w-[140px]">
                       {nodeCost.configurationSummary}
                     </span>
                   </div>
@@ -1908,7 +1845,7 @@ export const ServiceInspector: React.FC = () => {
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-blue-600" />
+                  <Layers className="w-3.5 h-3.5 text-circuit-600" />
                   Stacking Layer (Z-Index)
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -1916,7 +1853,7 @@ export const ServiceInspector: React.FC = () => {
                     type="number"
                     value={selectedNode.zIndex ?? 10}
                     onChange={(e) => setNodeZIndex(selectedNode.id, Number(e.target.value))}
-                    className="w-14 text-center font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-800 focus:outline-none focus:border-blue-600"
+                    className="w-14 text-center font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-800 focus:outline-none focus:border-circuit-600"
                   />
                 </div>
               </div>
@@ -1924,10 +1861,10 @@ export const ServiceInspector: React.FC = () => {
               <div className="grid grid-cols-2 gap-1.5 pt-0.5">
                 <button
                   onClick={() => bringToFront(selectedNode.id)}
-                  className="px-2 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-300 rounded flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                  className="px-2 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-circuit-50 hover:text-circuit-700 border border-slate-200 hover:border-circuit-300 rounded flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                   title="Bring in front of all components"
                 >
-                  <ChevronsUp className="w-3.5 h-3.5 text-blue-600" />
+                  <ChevronsUp className="w-3.5 h-3.5 text-circuit-600" />
                   Bring to Front
                 </button>
                 <button
@@ -1948,10 +1885,10 @@ export const ServiceInspector: React.FC = () => {
                 </button>
                 <button
                   onClick={() => sendToBack(selectedNode.id)}
-                  className="px-2 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-300 rounded flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                  className="px-2 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-circuit-50 hover:text-circuit-700 border border-slate-200 hover:border-circuit-300 rounded flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                   title="Send behind all components"
                 >
-                  <ChevronsDown className="w-3.5 h-3.5 text-blue-600" />
+                  <ChevronsDown className="w-3.5 h-3.5 text-circuit-600" />
                   Send to Back
                 </button>
               </div>
@@ -1975,7 +1912,7 @@ export const ServiceInspector: React.FC = () => {
 
             {/* Teaching Notes */}
             <div>
-              <div className="font-bold text-blue-800 uppercase tracking-wider text-[10px] mb-1.5">
+              <div className="font-bold text-circuit-800 uppercase tracking-wider text-[10px] mb-1.5">
                 AWS Architecture Notes
               </div>
               <div className="space-y-2">

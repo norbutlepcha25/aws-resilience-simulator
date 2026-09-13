@@ -84,7 +84,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
       <div
         ref={menuRef}
         style={{ top: `${adjustedY}px`, left: `${adjustedX}px` }}
-        className="fixed z-50 w-52 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-slate-200/90 py-1.5 select-none animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100"
+        className="fixed z-[10000] w-52 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-slate-200/90 py-1.5 select-none animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100"
       >
         <div className="px-3 py-2">
           <div className="text-xs font-bold text-slate-900 truncate">
@@ -111,7 +111,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         <div className="py-1">
           <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
             <span className="flex items-center gap-1">
-              <Layers className="w-3 h-3 text-blue-500" />
+              <Layers className="w-3 h-3 text-circuit-500" />
               Layer Order
             </span>
             <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[9px]">
@@ -126,7 +126,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             className="w-full px-3 py-1 text-xs text-left font-medium text-slate-700 hover:bg-slate-100 flex items-center justify-between transition-colors"
           >
             <div className="flex items-center gap-2">
-              <ChevronsUp className="w-3.5 h-3.5 text-blue-600" />
+              <ChevronsUp className="w-3.5 h-3.5 text-circuit-600" />
               <span>Bring to Front</span>
             </div>
             <span className="text-[10px] text-slate-400 font-mono">Shift+]</span>
@@ -165,7 +165,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             className="w-full px-3 py-1 text-xs text-left font-medium text-slate-700 hover:bg-slate-100 flex items-center justify-between transition-colors"
           >
             <div className="flex items-center gap-2">
-              <ChevronsDown className="w-3.5 h-3.5 text-blue-600" />
+              <ChevronsDown className="w-3.5 h-3.5 text-circuit-600" />
               <span>Send to Back</span>
             </div>
             <span className="text-[10px] text-slate-400 font-mono">Shift+[</span>
@@ -198,7 +198,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     <div
       ref={menuRef}
       style={{ top: `${adjustedY}px`, left: `${adjustedX}px` }}
-      className="fixed z-50 w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-slate-200/90 py-1.5 select-none animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100"
+      className="fixed z-[10000] w-60 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-slate-200/90 py-1.5 select-none animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100"
     >
       {/* Node Mini Header */}
       <div className="px-3 py-2 flex items-center gap-2.5">
@@ -243,13 +243,13 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             onOpenDetails(node);
             onClose();
           }}
-          className="w-full px-3 py-1.5 text-xs text-left font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center justify-between transition-colors group"
+          className="w-full px-3 py-1.5 text-xs text-left font-medium text-slate-700 hover:bg-circuit-50 hover:text-circuit-700 flex items-center justify-between transition-colors group"
         >
           <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-blue-600" />
+            <Info className="w-4 h-4 text-circuit-600" />
             <span>Get Status & Details</span>
           </div>
-          <span className="text-[10px] text-slate-400 group-hover:text-blue-500">
+          <span className="text-[10px] text-slate-400 group-hover:text-circuit-500">
             View
           </span>
         </button>
@@ -275,7 +275,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
       <div className="py-1">
         <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
           <span className="flex items-center gap-1">
-            <Layers className="w-3 h-3 text-blue-500" />
+            <Layers className="w-3 h-3 text-circuit-500" />
             Layer Order
           </span>
           <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[9px]">
@@ -290,7 +290,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
           className="w-full px-3 py-1.5 text-xs text-left font-medium text-slate-700 hover:bg-slate-100 flex items-center justify-between transition-colors"
         >
           <div className="flex items-center gap-2">
-            <ChevronsUp className="w-3.5 h-3.5 text-blue-600" />
+            <ChevronsUp className="w-3.5 h-3.5 text-circuit-600" />
             <span>Bring to Front</span>
           </div>
           <span className="text-[10px] text-slate-400 font-mono">Shift+]</span>
@@ -329,7 +329,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
           className="w-full px-3 py-1.5 text-xs text-left font-medium text-slate-700 hover:bg-slate-100 flex items-center justify-between transition-colors"
         >
           <div className="flex items-center gap-2">
-            <ChevronsDown className="w-3.5 h-3.5 text-blue-600" />
+            <ChevronsDown className="w-3.5 h-3.5 text-circuit-600" />
             <span>Send to Back</span>
           </div>
           <span className="text-[10px] text-slate-400 font-mono">Shift+[</span>

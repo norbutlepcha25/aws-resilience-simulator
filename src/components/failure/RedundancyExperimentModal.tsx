@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { useArchitecture } from '../../context/ArchitectureContext';
+import React, { useMemo, useState } from 'react';
+import { runSimulation } from '../../engine/simulation/requestSimulator.ts';
+import type { Node, Edge } from '@xyflow/react';
 import {
   GitCompare,
   CheckCircle2,
@@ -17,16 +18,65 @@ interface RedundancyExperimentModalProps {
   onClose: () => void;
 }
 
+// Two fixed, self-contained topologies matching the mini-diagrams this modal renders -
+// Architecture A (single ECS task) and Architecture B (two ECS tasks across AZ-A/AZ-B), both
+// behind an ALB with an RDS backend. Neither reads the user's own canvas: this modal has always
+// presented itself as a generic "Architecture A vs Architecture B" comparison, not a report on
+// the user's own build - what changed is that the outcome shown for each is now the REAL output
+// of `runSimulation` against these topologies, not fixed copy (see docs/audit/FAILURE_GAPS.md
+// finding 2 and docs/audit/PRIORITIZED_REFACTOR_PLAN.md item 7).
+function buildExperimentNodes(multiInstance: boolean, task1Failed: boolean): { nodes: Node<any>[]; edges: Edge<any>[] } {
+  const igw: Node<any> = { id: 'exp-igw', position: { x: 0, y: -100 }, data: { serviceId: 'internet_gateway', label: 'IGW', health: 'healthy' } };
+  const client: Node<any> = { id: 'exp-client', position: { x: 0, y: -200 }, data: { serviceId: 'user', label: 'User' } };
+  const alb: Node<any> = { id: 'exp-alb', position: { x: 0, y: 0 }, data: { serviceId: 'alb', label: 'ALB', subnet: 'public', health: 'healthy' } };
+  const task1: Node<any> = { id: 'exp-task-1', position: { x: -60, y: 100 }, data: { serviceId: 'ecs', label: 'ECS Task #1', subnet: 'public', az: 'AZ-A', health: task1Failed ? 'failed' : 'healthy', failureReason: task1Failed ? 'Simulated crash' : undefined } };
+  const rds: Node<any> = { id: 'exp-rds', position: { x: 0, y: 200 }, data: { serviceId: 'rds', label: 'RDS Database', subnet: 'private', health: 'healthy' } };
+
+  const nodes: Node<any>[] = [igw, client, alb, task1, rds];
+  const edges: Edge<any>[] = [
+    { id: 'exp-e1', source: 'exp-client', target: 'exp-alb', data: { protocol: 'HTTP' } } as Edge<any>,
+    { id: 'exp-e2', source: 'exp-alb', target: 'exp-task-1', data: { protocol: 'HTTP' } } as Edge<any>,
+    { id: 'exp-e3', source: 'exp-task-1', target: 'exp-rds', data: { protocol: 'SQL' } } as Edge<any>
+  ];
+
+  if (multiInstance) {
+    const task2: Node<any> = { id: 'exp-task-2', position: { x: 60, y: 100 }, data: { serviceId: 'ecs', label: 'ECS Task #2 (AZ-B)', subnet: 'public', az: 'AZ-B', health: 'healthy' } };
+    nodes.push(task2);
+    edges.push({ id: 'exp-e4', source: 'exp-alb', target: 'exp-task-2', data: { protocol: 'HTTP' } } as Edge<any>);
+  }
+
+  return { nodes, edges };
+}
+
+const EXPERIMENT_SCENARIO = {
+  id: 'redundancy-experiment',
+  name: 'Redundancy Experiment',
+  method: 'GET' as const,
+  path: '/orders',
+  startNodeId: 'exp-client',
+  trafficLevel: 'normal' as const
+};
+
 export const RedundancyExperimentModal: React.FC<RedundancyExperimentModalProps> = ({
   isOpen,
   onClose
 }) => {
   const [ecs1Failed, setEcs1Failed] = useState(false);
 
+  const resultA = useMemo(() => {
+    const { nodes, edges } = buildExperimentNodes(false, ecs1Failed);
+    return runSimulation(nodes, edges, EXPERIMENT_SCENARIO);
+  }, [ecs1Failed]);
+
+  const resultB = useMemo(() => {
+    const { nodes, edges } = buildExperimentNodes(true, ecs1Failed);
+    return runSimulation(nodes, edges, EXPERIMENT_SCENARIO);
+  }, [ecs1Failed]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
@@ -101,35 +151,33 @@ export const RedundancyExperimentModal: React.FC<RedundancyExperimentModalProps>
                   {ecs1Failed ? '❌ ECS Task #1 (CRASHED)' : '✓ ECS Task #1 (Healthy)'}
                 </div>
                 <div className="text-slate-600">↓</div>
-                <div className="p-1.5 rounded bg-sky-950 text-sky-300 border border-sky-800 inline-block font-semibold">RDS Database</div>
+                <div className="p-1.5 rounded bg-circuit-950 text-circuit-300 border border-circuit-800 inline-block font-semibold">RDS Database</div>
               </div>
             </div>
 
-            {/* Request Outcome */}
+            {/* Request Outcome - the real output of runSimulation against this topology */}
             <div
               className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
-                ecs1Failed
+                !resultA.success
                   ? 'bg-rose-950/60 border-rose-800 text-rose-200'
                   : 'bg-emerald-950/40 border-emerald-800 text-emerald-200'
               }`}
             >
               <div className="flex items-center gap-2 font-bold text-sm">
-                {ecs1Failed ? (
+                {!resultA.success ? (
                   <>
                     <XCircle className="w-4 h-4 text-rose-400" />
-                    <span>502 Bad Gateway (Service Unavailable)</span>
+                    <span>HTTP {resultA.statusCode}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>200 OK (Request Succeeds)</span>
+                    <span>HTTP {resultA.statusCode} (Request Succeeds)</span>
                   </>
                 )}
               </div>
               <p className="text-[11px] leading-relaxed opacity-90">
-                {ecs1Failed
-                  ? 'ALB has no remaining healthy targets in its target group. 100% of user traffic fails.'
-                  : 'Single instance accepts and responds to client requests.'}
+                {resultA.summary}
               </p>
             </div>
           </div>
@@ -167,20 +215,28 @@ export const RedundancyExperimentModal: React.FC<RedundancyExperimentModalProps>
                   </div>
                 </div>
                 <div className="text-slate-600">↓</div>
-                <div className="p-1.5 rounded bg-sky-950 text-sky-300 border border-sky-800 inline-block font-semibold">RDS Database</div>
+                <div className="p-1.5 rounded bg-circuit-950 text-circuit-300 border border-circuit-800 inline-block font-semibold">RDS Database</div>
               </div>
             </div>
 
-            {/* Request Outcome */}
-            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-200 text-xs space-y-1.5">
+            {/* Request Outcome - the real output of runSimulation against this topology */}
+            <div
+              className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                !resultB.success
+                  ? 'bg-rose-950/60 border-rose-800 text-rose-200'
+                  : 'bg-emerald-950/40 border-emerald-800 text-emerald-200'
+              }`}
+            >
               <div className="flex items-center gap-2 font-bold text-sm">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>200 OK (Traffic Rerouted Successfully)</span>
+                {!resultB.success ? (
+                  <XCircle className="w-4 h-4 text-rose-400" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                )}
+                <span>HTTP {resultB.statusCode}{resultB.success ? ' (Traffic Rerouted Successfully)' : ''}</span>
               </div>
               <p className="text-[11px] leading-relaxed opacity-90">
-                {ecs1Failed
-                  ? 'ALB health check marks Task #1 unhealthy and transparently routes all requests to Task #2. Zero user disruption!'
-                  : 'Traffic is balanced across both healthy compute tasks.'}
+                {resultB.summary}
               </p>
             </div>
           </div>

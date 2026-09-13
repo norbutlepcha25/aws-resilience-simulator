@@ -36,7 +36,11 @@ import type { Finding } from '../engine/validation/index.ts';
 import { analyzeArchitectureFindings } from '../engine/analysis/architecturalFindings.ts';
 import type { RequestTrace } from '../engine/trace/index.ts';
 
+import type { LabReference } from '../data/courseLabs.ts';
+import { runLabReference } from '../engine/labs/runLabReference.ts';
+
 interface ArchitectureContextType {
+  openLabReference: (reference: LabReference, run?: boolean) => void;
   nodes: Node<ServiceNodeData>[];
   setNodes: React.Dispatch<React.SetStateAction<Node<ServiceNodeData>[]>>;
   onNodesChange: any;
@@ -932,6 +936,23 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
   );
   const { nodes: effectiveNodes, edges: effectiveEdges, impacts: failureImpacts } = effectiveArchitectureState;
 
+  const openLabReference = useCallback((reference: LabReference, run = false) => {
+    const snapshot = structuredClone(reference);
+    setNodes(snapshot.nodes);
+    setEdges(snapshot.edges);
+    setActiveFailures([]);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setShowNaclSideColumn(false);
+    setScenario(snapshot.scenario);
+    setSimulationResult(run ? runLabReference(snapshot) : null);
+    setActiveStepIndex(run ? 0 : null);
+    setHoveredStepIndex(null);
+    setHighlightTaskFlow(run);
+    setIsPlaying(run);
+    setAppMode(run ? 'simulate' : 'design');
+  }, [setNodes, setEdges]);
+
   // Load a reference architecture template
   const loadTemplate = useCallback((templateId: string) => {
     const template = REFERENCE_ARCHITECTURES.find(t => t.id === templateId);
@@ -1350,6 +1371,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         architecturalFindings,
 
         loadTemplate,
+        openLabReference,
         activeChallenge,
         setActiveChallenge,
         challengeResult,

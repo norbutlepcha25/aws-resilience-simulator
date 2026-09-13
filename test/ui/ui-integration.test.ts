@@ -41,12 +41,15 @@ function Harness({ apiRef }: { apiRef: { current: Api | null } }) {
   return null;
 }
 
-async function mount(showInspector = false) {
+const { LabsModal } = await import('../../src/components/labs/LabsModal.tsx');
+const { COURSE_LABS } = await import('../../src/data/courseLabs.ts');
+
+async function mount(showInspector = false, showLabs = false) {
   const container = document.getElementById('root')!;
   const root = createRoot(container);
   const apiRef: { current: Api | null } = { current: null };
   await act(async () => {
-    root.render(React.createElement(ArchitectureProvider, null, React.createElement(Harness, { apiRef }), showInspector ? React.createElement(ServiceInspector) : null));
+    root.render(React.createElement(ArchitectureProvider, null, React.createElement(Harness, { apiRef }), showInspector ? React.createElement(ServiceInspector) : null, showLabs ? React.createElement(LabsModal, { isOpen: true, onClose: () => {} }) : null));
   });
   return {
     api: () => apiRef.current!,
@@ -75,6 +78,37 @@ test('1. Build architecture: adding services and connecting them updates the Arc
   assert.ok(edge, 'the connection must appear in the Architecture Model edges');
 
   await h.unmount();
+});
+
+test('Labs: select instructions, run ALB failover, then load a clean editable reference', async () => {
+  const h = await mount(false, true);
+  try {
+    const button = (text: string) => [...document.querySelectorAll('button')].find(b => b.textContent?.includes(text))!;
+    assert.equal(document.querySelectorAll('nav[aria-label="Course labs"] button').length, 9);
+    await h.act(() => button('Lab 5').click());
+    assert.match(document.querySelector('a')!.href, /Lab-05-ALB.html$/);
+    const runButtons = [...document.querySelectorAll('button')].filter(b => b.textContent === 'Run reference simulation');
+    await h.act(() => runButtons[1].click());
+    assert.equal(h.api().appMode, 'simulate');
+    assert.equal(h.api().simulationResult?.success, true);
+    assert.ok(h.api().simulationResult?.path.includes('lab-task-b'));
+    await h.act(() => h.api().openLabReference(COURSE_LABS[3].references[0]));
+    assert.equal(h.api().appMode, 'design');
+    assert.equal(h.api().simulationResult, null);
+    assert.equal(h.api().isPlaying, false);
+    await h.act(() => h.api().runScenario());
+    assert.equal(h.api().simulationResult?.success, true, h.api().simulationResult?.summary);
+    assert.equal(COURSE_LABS[5].references[0].nodes.find(n => n.id === 'lab-task-a')!.data.health, 'healthy');
+    await h.act(() => button('Lab 7').click());
+    assert.match(document.querySelector('a')!.href, /Lab-07-EKS.html$/);
+    await h.act(() => button('Lab 8').click());
+    assert.match(document.querySelector('a')!.href, /Lab-08-EKS-scaling.html$/);
+    const eksRuns = [...document.querySelectorAll('button')].filter(b => b.textContent === 'Run reference simulation');
+    await h.act(() => eksRuns[1].click());
+    assert.equal(h.api().simulationResult?.success, true);
+    assert.match(h.api().simulationResult!.summary, /no scheduler, HPA/);
+    assert.equal(h.api().nodes.find(n => n.id === 'lab-enrolment')!.data.replicas, 5);
+  } finally { await h.unmount(); }
 });
 
 test('2. Configure service: editing a node writes through to the Architecture Model', async () => {

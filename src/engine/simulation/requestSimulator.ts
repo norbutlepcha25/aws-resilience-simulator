@@ -260,7 +260,6 @@ export function runSimulation(
       const hasAutoScaling =
         isServerless ||
         (currentNode.data.replicas && currentNode.data.replicas > 1) ||
-        currentNode.data.multiAz ||
         nodes.some(n => n.data.serviceId === 'auto_scaling' && n.data.health !== 'failed');
 
       if (hasAutoScaling) {
@@ -451,7 +450,9 @@ export function runSimulation(
     // =========================================================================
     // BEHAVIOR 5: Load Balancer (ALB / API Gateway) Target Health Evaluation
     // =========================================================================
-    if (['alb', 'api_gateway'].includes(currentNode.data.serviceId)) {
+    if (['alb', 'nlb', 'api_gateway'].includes(currentNode.data.serviceId)) {
+      const isAlbOrNlb = ['alb', 'nlb'].includes(currentNode.data.serviceId);
+      const lbProtocol = currentNode.data.serviceId === 'nlb' ? 'TCP' : 'HTTP';
       const computeTargets = downstreamNodes.filter(n => ['ecs', 'ec2', 'lambda', 'fargate'].includes(n.data.serviceId));
       const targetList = (computeTargets.length > 0 ? computeTargets : downstreamNodes);
 
@@ -464,7 +465,7 @@ export function runSimulation(
 
       const healthyTargets = targetList.filter(t => t.data.health === 'healthy');
 
-      if (healthyTargets.length === 0) {
+      if (targetList.length === 0) {
         steps.push({
           id: `step-${stepNumber++}`,
           stepNumber: steps.length + 1,
@@ -473,7 +474,65 @@ export function runSimulation(
           targetNodeId: currentNode.id,
           sourceNodeName: currentNode.data.label,
           targetNodeName: currentNode.data.label,
-          protocol: 'HTTP',
+          protocol: lbProtocol as any,
+          action: 'Target Group Empty: No Registered Targets',
+          status: 'failed',
+          explanation: `${currentNode.data.label} has no registered targets in its target group/listener. With no endpoints to forward to, the load balancer cannot dispatch this request.`,
+          targetHealth: 'failed',
+          latencyMs: 30,
+          details: {
+            statusCode: 503,
+            failureReason: 'No targets are registered behind this load balancer listener.'
+          }
+        });
+        overallSuccess = false;
+        finalStatusCode = 503;
+        finalSummary = `${currentNode.data.label} cannot route traffic because no targets are registered.`;
+        break;
+      }
+
+      if (healthyTargets.length === 0) {
+        if (isAlbOrNlb) {
+          const failOpenTarget = targetList[0];
+          const failOpenDetails = targetsEvaluation.map(t => ({
+            ...t,
+            selected: t.id === failOpenTarget.id
+          }));
+
+          steps.push({
+            id: `step-${stepNumber++}`,
+            stepNumber: steps.length + 1,
+            timestampMs: currentTimestamp,
+            sourceNodeId: currentNode.id,
+            targetNodeId: failOpenTarget.id,
+            sourceNodeName: currentNode.data.label,
+            targetNodeName: failOpenTarget.data.label,
+            protocol: lbProtocol as any,
+            action: 'Fail-Open Routing: All Targets Unhealthy',
+            status: 'bypassed',
+            explanation: `${currentNode.data.label} detected that all ${targetList.length} registered targets are unhealthy. Following ${currentNode.data.serviceId.toUpperCase()} fail-open behavior, it still forwards traffic to a target. Routing succeeded, but application execution is expected to fail while targets remain unhealthy.`,
+            targetHealth: failOpenTarget.data.health,
+            latencyMs: 20,
+            details: {
+              targetsEvaluated: failOpenDetails,
+              failureReason: 'Load balancer fail-open routing occurred because every registered target is unhealthy.'
+            }
+          });
+
+          currentTimestamp += 20;
+          currentNode = failOpenTarget;
+          continue;
+        }
+
+        steps.push({
+          id: `step-${stepNumber++}`,
+          stepNumber: steps.length + 1,
+          timestampMs: currentTimestamp,
+          sourceNodeId: currentNode.id,
+          targetNodeId: currentNode.id,
+          sourceNodeName: currentNode.data.label,
+          targetNodeName: currentNode.data.label,
+          protocol: lbProtocol as any,
           action: 'Target Health Check: ALL TARGETS FAILED',
           status: 'failed',
           explanation: `HTTP 502 Bad Gateway: ${currentNode.data.label} evaluated registered targets in target group. All ${targetList.length} targets failed health checks! No healthy endpoints available to route traffic.`,
@@ -494,7 +553,7 @@ export function runSimulation(
       // At least one healthy target! Select healthy target
       const selectedTarget = healthyTargets[0];
 
-      if (pushFirewallBlockIfAny(currentNode, selectedTarget, 'HTTP')) {
+      if (pushFirewallBlockIfAny(currentNode, selectedTarget, lbProtocol)) {
         break;
       }
 
@@ -522,7 +581,7 @@ export function runSimulation(
         targetNodeId: selectedTarget.id,
         sourceNodeName: currentNode.data.label,
         targetNodeName: selectedTarget.data.label,
-        protocol: 'HTTP',
+        protocol: lbProtocol as any,
         action: `Route to ${selectedTarget.data.label}`,
         status: 'success',
         explanation: albExplanation,
@@ -555,11 +614,13 @@ export function runSimulation(
         }
 
         if (dbTarget.data.health === 'failed') {
-          // Multi-AZ Automated Failover Evaluation
-          const isMultiAzDb = dbTarget.data.multiAz || dbTarget.data.az === 'Multi-AZ' || dbTarget.data.serviceId === 'aurora';
+          const dbReplicas = dbTarget.data.replicas || 1;
+          const hasStandbyCapacity = dbReplicas > 1;
+          const isRds = dbTarget.data.serviceId === 'rds';
+          const isAurora = dbTarget.data.serviceId === 'aurora';
+          const isDynamoDb = dbTarget.data.serviceId === 'dynamodb';
 
-          if (isMultiAzDb) {
-            // Multi-AZ failover succeeds!
+          if (isRds && dbTarget.data.multiAz && hasStandbyCapacity) {
             steps.push({
               id: `step-${stepNumber++}`,
               stepNumber: steps.length + 1,
@@ -569,7 +630,7 @@ export function runSimulation(
               sourceNodeName: currentNode.data.label,
               targetNodeName: dbTarget.data.label,
               protocol: 'SQL',
-              action: 'Multi-AZ Automated Database Failover',
+              action: 'RDS Multi-AZ Automated Failover',
               status: 'success',
               explanation: `Primary DB in ${dbTarget.data.az || 'AZ-A'} failed. Amazon RDS Multi-AZ automated failover detected heartbeat loss: Promoted synchronous standby replica in secondary AZ to primary writer via DNS CNAME update (~35 seconds). Zero data loss!`,
               targetHealth: 'healthy',
@@ -582,6 +643,53 @@ export function runSimulation(
             // Successfully processed query via promoted replica
             overallSuccess = true;
             finalSummary = 'Request succeeded: Multi-AZ database automatically failed over to standby replica.';
+            break;
+          } else if (isAurora && hasStandbyCapacity) {
+            steps.push({
+              id: `step-${stepNumber++}`,
+              stepNumber: steps.length + 1,
+              timestampMs: currentTimestamp,
+              sourceNodeId: currentNode.id,
+              targetNodeId: dbTarget.id,
+              sourceNodeName: currentNode.data.label,
+              targetNodeName: dbTarget.data.label,
+              protocol: 'SQL',
+              action: 'Aurora Writer Failover',
+              status: 'success',
+              explanation: `Aurora writer became unavailable. Cluster endpoint failed over to a healthy Aurora replica and resumed writes using the surviving cluster capacity.`,
+              targetHealth: 'healthy',
+              latencyMs: 40,
+              details: {
+                recoveryApplied: 'Aurora cluster writer failed over to an existing healthy replica.'
+              }
+            });
+            currentTimestamp += 40;
+            overallSuccess = true;
+            finalSummary = 'Request succeeded: Aurora failed over writer responsibilities to a surviving replica.';
+            break;
+          } else if (isDynamoDb) {
+            steps.push({
+              id: `step-${stepNumber++}`,
+              stepNumber: steps.length + 1,
+              timestampMs: currentTimestamp,
+              sourceNodeId: currentNode.id,
+              targetNodeId: dbTarget.id,
+              sourceNodeName: currentNode.data.label,
+              targetNodeName: dbTarget.data.label,
+              protocol: 'HTTPS',
+              action: 'DynamoDB Endpoint Unavailable',
+              status: 'failed',
+              explanation: `${dbTarget.data.label} endpoint is unavailable. DynamoDB does not use relational standby promotion semantics; the operation fails until the service endpoint recovers.`,
+              targetHealth: 'failed',
+              latencyMs: 800,
+              details: {
+                statusCode: 503,
+                failureReason: 'DynamoDB API endpoint unavailable.'
+              }
+            });
+            overallSuccess = false;
+            finalStatusCode = 503;
+            finalSummary = `Request failed: ${dbTarget.data.label} endpoint is unavailable.`;
             break;
           } else if (cacheTarget && cacheTarget.data.health === 'healthy') {
             // Fallback to cache
@@ -620,17 +728,21 @@ export function runSimulation(
               protocol: 'SQL',
               action: 'Database Connection Timeout',
               status: 'failed',
-              explanation: `CRITICAL ERROR: ${currentNode.data.label} attempted SQL query against ${dbTarget.data.label}. Connection timed out after 5000ms. Single-AZ database node is FAILED. Application cannot retrieve required relational data.`,
+              explanation: isRds && dbTarget.data.multiAz && !hasStandbyCapacity
+                ? `CRITICAL ERROR: ${currentNode.data.label} attempted SQL query against ${dbTarget.data.label}. A Multi-AZ flag is set, but no explicit standby capacity is modeled (replicas=${dbReplicas}). Connection timed out after 5000ms.`
+                : `CRITICAL ERROR: ${currentNode.data.label} attempted SQL query against ${dbTarget.data.label}. Connection timed out after 5000ms. Database node is FAILED and no surviving writer capacity is available.`,
               targetHealth: 'failed',
               latencyMs: 5000,
               details: {
                 statusCode: 504,
-                failureReason: 'Single-AZ Database instance is down and has no standby replica.'
+                failureReason: isRds && dbTarget.data.multiAz && !hasStandbyCapacity
+                  ? 'Multi-AZ flag alone is insufficient without modeled standby capacity.'
+                  : 'Database instance is down and has no standby capacity.'
               }
             });
             overallSuccess = false;
             finalStatusCode = 504;
-            finalSummary = `Request failed: Database ${dbTarget.data.label} is offline and has no Multi-AZ replica.`;
+            finalSummary = `Request failed: Database ${dbTarget.data.label} is offline and has no surviving standby capacity.`;
             break;
           }
         }
@@ -638,6 +750,37 @@ export function runSimulation(
 
       // Check SQS Queue Buffering
       if (queueTarget) {
+        const queueProtocol = outgoingEdges.find(e => e.target === queueTarget.id)?.data?.protocol || 'Message';
+        if (pushFirewallBlockIfAny(currentNode, queueTarget, queueProtocol)) {
+          break;
+        }
+
+        if (queueTarget.data.health !== 'healthy') {
+          steps.push({
+            id: `step-${stepNumber++}`,
+            stepNumber: steps.length + 1,
+            timestampMs: currentTimestamp,
+            sourceNodeId: currentNode.id,
+            targetNodeId: queueTarget.id,
+            sourceNodeName: currentNode.data.label,
+            targetNodeName: queueTarget.data.label,
+            protocol: 'Message',
+            action: 'SQS SendMessage API Unavailable',
+            status: 'failed',
+            explanation: `${currentNode.data.label} could not publish to ${queueTarget.data.label}. SQS SendMessage did not return HTTP 200, so asynchronous handoff was not accepted.`,
+            targetHealth: 'failed',
+            latencyMs: 850,
+            details: {
+              statusCode: 503,
+              failureReason: 'SQS queue endpoint unavailable for SendMessage.'
+            }
+          });
+          overallSuccess = false;
+          finalStatusCode = 503;
+          finalSummary = `Request failed: ${queueTarget.data.label} could not accept SendMessage requests.`;
+          break;
+        }
+
         steps.push({
           id: `step-${stepNumber++}`,
           stepNumber: steps.length + 1,
@@ -647,17 +790,17 @@ export function runSimulation(
           sourceNodeName: currentNode.data.label,
           targetNodeName: queueTarget.data.label,
           protocol: 'Message',
-          action: 'Enqueue Asynchronous Message',
+          action: 'SQS SendMessage API Accepted',
           status: 'success',
-          explanation: `Successfully published message payload to ${queueTarget.data.label}. Web tier responded 202 Accepted immediately, decoupling client from background execution!`,
+          explanation: `${currentNode.data.label} called SendMessage on ${queueTarget.data.label} and received HTTP 200 from the SQS API. The application can now choose to return HTTP 202 Accepted to the caller while downstream consumers process asynchronously.`,
           targetHealth: queueTarget.data.health,
           latencyMs: 18,
-          details: { statusCode: 202 }
+          details: { statusCode: 200 }
         });
         currentTimestamp += 18;
         overallSuccess = true;
         finalStatusCode = 202;
-        finalSummary = `Asynchronous message successfully enqueued into ${queueTarget.data.label}. Decoupled processing guaranteed.`;
+        finalSummary = `SQS acknowledged SendMessage for ${queueTarget.data.label} (HTTP 200); application returned 202 Accepted for asynchronous processing.`;
         break;
       }
     }

@@ -10,6 +10,10 @@ import { detectSPOFs } from '../src/engine/analysis/spofDetector.ts';
 import { detectBottlenecks } from '../src/engine/analysis/bottleneckDetector.ts';
 import type { SimulationScenario } from '../src/types/index.ts';
 
+const AWS_ALB_HEALTH_DOC = 'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html';
+const AWS_NLB_TROUBLESHOOTING_DOC = 'https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-troubleshooting.html';
+const AWS_SQS_SEND_MESSAGE_DOC = 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html';
+
 test('1. Service Catalog Integrity', () => {
   assert.ok(AWS_SERVICES.length >= 10, 'Catalog should contain at least 10 core AWS services');
   const user = AWS_SERVICES.find(s => s.id === 'user');
@@ -71,7 +75,7 @@ test('3. Simulation: ALB Health Check Failover when ECS-1 is FAILED', () => {
   assert.strictEqual(albStep.targetNodeId, 'node-ecs-az-b', 'ALB should route to surviving ECS Task in AZ-B');
 });
 
-test('4. Simulation: 502 Bad Gateway when ALL compute targets fail', () => {
+test('4. Simulation: ALB fail-open routing still ends in failure when ALL compute targets are unhealthy', () => {
   const haArch = REFERENCE_ARCHITECTURES.find(a => a.id === 'highly-available-multiaz')!;
   // Fail BOTH ECS tasks
   const modifiedNodes = haArch.nodes.map(n => {
@@ -94,8 +98,72 @@ test('4. Simulation: 502 Bad Gateway when ALL compute targets fail', () => {
   };
 
   const result = runSimulation(modifiedNodes, haArch.edges, scenario);
+  /**
+   * Corrected assertion documentation:
+   * - Old assumption: ALB returns immediate HTTP 502 when every registered target is unhealthy.
+   * - AWS source: ALB fails open when all registered targets are unhealthy
+   *   (see AWS docs: ${AWS_ALB_HEALTH_DOC}).
+   * - Replacement: assert fail-open routing step occurs, then request still fails because unhealthy
+   *   application targets cannot execute user traffic.
+   * - Retained regression purpose: ensure total outage is still detected when no compute capacity survives.
+   */
   assert.strictEqual(result.success, false, 'Request must fail when all compute targets are offline');
-  assert.strictEqual(result.statusCode, 502, 'Should return HTTP 502 Bad Gateway');
+  assert.strictEqual(result.statusCode, 503, 'Fail-open routing should still end with service unavailability from failed targets');
+  assert.ok(result.steps.some(s => s.action.includes('Fail-Open Routing')), 'ALB should record fail-open routing when all targets are unhealthy');
+});
+
+test('4b. Simulation: ALB with no registered targets returns 503 without fail-open', () => {
+  const nodes: any[] = [
+    { id: 'node-user', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'user', label: 'User', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
+    { id: 'node-igw', type: 'serviceNode', position: { x: 100, y: 0 }, data: { serviceId: 'internet_gateway', label: 'Internet Gateway', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
+    { id: 'node-alb', type: 'serviceNode', position: { x: 200, y: 0 }, data: { serviceId: 'alb', label: 'ALB', category: 'Networking & Content Delivery', health: 'healthy', az: 'Multi-AZ', subnet: 'public', replicas: 2, multiAz: true } },
+    { id: 'box-public-subnet', type: 'boundaryNode', position: { x: 260, y: -20 }, data: { label: 'Public subnet', boundaryType: 'public_subnet', width: 120, height: 80 } }
+  ];
+  const edges: any[] = [
+    { id: 'e1', source: 'node-user', target: 'node-igw', data: { protocol: 'HTTPS' } },
+    { id: 'e2', source: 'node-igw', target: 'node-alb', data: { protocol: 'HTTPS' } },
+    { id: 'e3', source: 'node-alb', target: 'box-public-subnet', data: { protocol: 'HTTP' } }
+  ];
+
+  const result = runSimulation(nodes as any, edges as any, {
+    id: 'test-alb-no-targets',
+    name: 'ALB Empty Target Group',
+    method: 'GET',
+    path: '/',
+    startNodeId: 'node-user',
+    trafficLevel: 'normal'
+  });
+
+  assert.strictEqual(result.success, false, 'Request must fail when no targets are registered behind ALB');
+  assert.strictEqual(result.statusCode, 503, 'ALB should return service unavailable when target group has no targets');
+  assert.ok(result.steps.some(s => s.action.includes('Target Group Empty')), 'Must explicitly classify no registered targets');
+});
+
+test('4c. Simulation: NLB fail-open routing is recorded separately from backend execution success', () => {
+  const nodes: any[] = [
+    { id: 'node-user', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'user', label: 'User', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
+    { id: 'node-igw', type: 'serviceNode', position: { x: 100, y: 0 }, data: { serviceId: 'internet_gateway', label: 'Internet Gateway', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
+    { id: 'node-nlb', type: 'serviceNode', position: { x: 200, y: 0 }, data: { serviceId: 'nlb', label: 'NLB', category: 'Networking & Content Delivery', health: 'healthy', az: 'Multi-AZ', subnet: 'public', replicas: 2, multiAz: true } },
+    { id: 'node-ec2-failed', type: 'serviceNode', position: { x: 300, y: 0 }, data: { serviceId: 'ec2', label: 'Backend EC2', category: 'Compute', health: 'failed', az: 'AZ-A', subnet: 'private', replicas: 1, multiAz: false } }
+  ];
+  const edges: any[] = [
+    { id: 'e1', source: 'node-user', target: 'node-igw', data: { protocol: 'HTTPS' } },
+    { id: 'e2', source: 'node-igw', target: 'node-nlb', data: { protocol: 'TCP' } },
+    { id: 'e3', source: 'node-nlb', target: 'node-ec2-failed', data: { protocol: 'TCP' } }
+  ];
+
+  const result = runSimulation(nodes as any, edges as any, {
+    id: 'test-nlb-fail-open',
+    name: 'NLB All Targets Unhealthy',
+    method: 'GET',
+    path: '/',
+    startNodeId: 'node-user',
+    trafficLevel: 'normal'
+  });
+
+  assert.strictEqual(result.success, false, 'Fail-open routing does not imply backend success');
+  assert.strictEqual(result.statusCode, 503, 'Backend failure should still surface as unavailable after fail-open routing');
+  assert.ok(result.steps.some(s => s.action.includes('Fail-Open Routing')), `NLB should document fail-open behavior (${AWS_NLB_TROUBLESHOOTING_DOC})`);
 });
 
 test('5. Single Point of Failure (SPOF) Detection on Basic Web App', () => {
@@ -317,7 +385,7 @@ test('11. Database Multi-AZ Automated Failover', () => {
       id: 'node-rds',
       type: 'serviceNode',
       position: { x: 100, y: 0 },
-      data: { serviceId: 'rds', label: 'Amazon RDS (Multi-AZ)', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', multiAz: true }
+      data: { serviceId: 'rds', label: 'Amazon RDS (Multi-AZ)', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', multiAz: true, replicas: 2 }
     }
   ];
 
@@ -335,8 +403,100 @@ test('11. Database Multi-AZ Automated Failover', () => {
   };
 
   const result = runSimulation(multiAzDbNodes as any, edges as any, scenario);
+  /**
+   * Corrected assertion documentation:
+   * - Old assumption: multiAz=true alone implied immediate successful failover.
+   * - AWS source: failover requires an actual standby/surviving capacity, not only a flag.
+   * - Replacement: require modeled standby capacity (`replicas: 2`) and verify RDS-specific failover action.
+   * - Retained regression purpose: verify resilient relational database recovery when standby is present.
+   */
   assert.strictEqual(result.success, true, 'Multi-AZ DB should automatically failover to standby replica');
-  assert.ok(result.steps.some(s => s.action.includes('Multi-AZ Automated Database Failover')), 'Should log automated failover event');
+  assert.ok(result.steps.some(s => s.action.includes('RDS Multi-AZ Automated Failover')), 'Should log RDS automated failover event');
+});
+
+test('11b. Database contracts: Aurora requires surviving replica capacity; DynamoDB failure is not relational standby promotion', () => {
+  const auroraNoReplicaNodes: any[] = [
+    { id: 'node-ecs', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'ecs', label: 'ECS Task', category: 'Compute', health: 'healthy', az: 'AZ-A', subnet: 'private', replicas: 1, multiAz: false } },
+    { id: 'node-aurora', type: 'serviceNode', position: { x: 120, y: 0 }, data: { serviceId: 'aurora', label: 'Aurora Cluster', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', replicas: 1, multiAz: true } }
+  ];
+  const edges: any[] = [{ id: 'e1', source: 'node-ecs', target: 'node-aurora', data: { protocol: 'SQL' } }];
+
+  const auroraNoReplicaResult = runSimulation(auroraNoReplicaNodes as any, edges as any, {
+    id: 'aurora-no-replica',
+    name: 'Aurora Without Replica Capacity',
+    method: 'POST',
+    path: '/write',
+    startNodeId: 'node-ecs',
+    trafficLevel: 'normal'
+  });
+  assert.strictEqual(auroraNoReplicaResult.success, false, 'Aurora should fail when no surviving replica capacity exists');
+  assert.strictEqual(auroraNoReplicaResult.statusCode, 504);
+
+  const auroraWithReplicaNodes = auroraNoReplicaNodes.map(n =>
+    n.id === 'node-aurora' ? { ...n, data: { ...n.data, replicas: 2 } } : n
+  );
+  const auroraWithReplicaResult = runSimulation(auroraWithReplicaNodes as any, edges as any, {
+    id: 'aurora-with-replica',
+    name: 'Aurora With Replica Capacity',
+    method: 'POST',
+    path: '/write',
+    startNodeId: 'node-ecs',
+    trafficLevel: 'normal'
+  });
+  assert.strictEqual(auroraWithReplicaResult.success, true, 'Aurora should recover when a surviving replica exists');
+  assert.ok(auroraWithReplicaResult.steps.some(s => s.action.includes('Aurora Writer Failover')));
+
+  const dynamoNodes: any[] = [
+    { id: 'node-ecs', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'ecs', label: 'ECS Task', category: 'Compute', health: 'healthy', az: 'AZ-A', subnet: 'private', replicas: 1, multiAz: false } },
+    { id: 'node-dynamo', type: 'serviceNode', position: { x: 120, y: 0 }, data: { serviceId: 'dynamodb', label: 'DynamoDB', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', replicas: 1, multiAz: true } }
+  ];
+  const dynamoResult = runSimulation(dynamoNodes as any, [{ id: 'e2', source: 'node-ecs', target: 'node-dynamo', data: { protocol: 'HTTPS' } }] as any, {
+    id: 'dynamo-failed',
+    name: 'DynamoDB Endpoint Outage',
+    method: 'POST',
+    path: '/write',
+    startNodeId: 'node-ecs',
+    trafficLevel: 'normal'
+  });
+  assert.strictEqual(dynamoResult.success, false, 'DynamoDB endpoint outage should fail the request');
+  assert.strictEqual(dynamoResult.statusCode, 503);
+  assert.ok(dynamoResult.steps.some(s => s.action.includes('DynamoDB Endpoint Unavailable')));
+  assert.ok(!dynamoResult.steps.some(s => s.explanation.includes('standby replica')), 'DynamoDB flow must not claim relational standby promotion');
+});
+
+test('11c. SQS producer acknowledgement (SendMessage 200) is independent from app 202 and downstream consumers', () => {
+  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'event-driven-async')!;
+  assert.ok(tpl, 'Event-driven async template should exist');
+
+  const scenario: SimulationScenario = {
+    id: 'sqs-ack',
+    name: 'SQS Ack Separation',
+    method: 'POST',
+    path: '/orders',
+    startNodeId: 'node-user',
+    trafficLevel: 'normal'
+  };
+
+  const happy = runSimulation(tpl.nodes, tpl.edges, scenario);
+  const sendMessageStep = happy.steps.find(s => s.action === 'SQS SendMessage API Accepted');
+  assert.ok(sendMessageStep, `Must represent SQS SendMessage API acknowledgement (${AWS_SQS_SEND_MESSAGE_DOC})`);
+  assert.strictEqual(sendMessageStep?.details?.statusCode, 200, 'SendMessage API acknowledgement should be HTTP 200');
+  assert.strictEqual(happy.statusCode, 202, 'Application response can remain HTTP 202 Accepted');
+
+  const failedQueueNodes = tpl.nodes.map(n =>
+    n.id === 'node-sqs' ? { ...n, data: { ...(n.data as any), health: 'failed' as const } } : n
+  );
+  const failedQueue = runSimulation(failedQueueNodes as any, tpl.edges, scenario);
+  assert.strictEqual(failedQueue.success, false, 'Publishing should fail when SQS endpoint is unavailable');
+  assert.strictEqual(failedQueue.statusCode, 503, 'Unavailable queue publishing must not silently succeed');
+  assert.ok(failedQueue.steps.some(s => s.action === 'SQS SendMessage API Unavailable'));
+
+  const failedConsumerNodes = tpl.nodes.map(n =>
+    n.id === 'node-worker-ecs' ? { ...n, data: { ...(n.data as any), health: 'failed' as const } } : n
+  );
+  const producerStillAcked = runSimulation(failedConsumerNodes as any, tpl.edges, scenario);
+  assert.strictEqual(producerStillAcked.success, true, 'Producer acknowledgement should not depend on immediate consumer health');
+  assert.strictEqual(producerStillAcked.statusCode, 202, 'Producer-facing application response remains 202 when SendMessage succeeded');
 });
 
 test('12. Multi-AZ VPC Reference Architecture Integrity & Boundary Composition', () => {
@@ -922,7 +1082,8 @@ test('30. Reference Diagram "Auto Scaling: EC2 Instance Failure Recovery"', () =
   );
   const totalOutage = runSimulation(bothFailed, tpl.edges, scenario);
   assert.strictEqual(totalOutage.success, false, 'Request must fail when every EC2 instance is down');
-  assert.strictEqual(totalOutage.statusCode, 502, 'Should return 502 Bad Gateway with zero healthy targets');
+  // Corrected assumption aligns with ALB fail-open docs: routing still occurs, then backend execution fails.
+  assert.strictEqual(totalOutage.statusCode, 503, 'Should surface backend unavailability after fail-open routing');
 
   // A traffic spike must independently trigger the Auto Scaling Group to scale out.
   const surge = runSimulation(tpl.nodes, tpl.edges, { ...scenario, trafficLevel: '10x' });

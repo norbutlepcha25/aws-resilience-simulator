@@ -465,7 +465,7 @@ export function runSimulation(
 
       const healthyTargets = targetList.filter(t => t.data.health === 'healthy');
 
-      if (targetList.length === 0) {
+      if (targetList.length === 0 && isAlbOrNlb) {
         steps.push({
           id: `step-${stepNumber++}`,
           stepNumber: steps.length + 1,
@@ -488,6 +488,31 @@ export function runSimulation(
         overallSuccess = false;
         finalStatusCode = 503;
         finalSummary = `${currentNode.data.label} cannot route traffic because no targets are registered.`;
+        break;
+      }
+      if (targetList.length === 0 && currentNode.data.serviceId === 'api_gateway') {
+        steps.push({
+          id: `step-${stepNumber++}`,
+          stepNumber: steps.length + 1,
+          timestampMs: currentTimestamp,
+          sourceNodeId: currentNode.id,
+          targetNodeId: currentNode.id,
+          sourceNodeName: currentNode.data.label,
+          targetNodeName: currentNode.data.label,
+          protocol: 'HTTPS',
+          action: 'API Integration Missing',
+          status: 'failed',
+          explanation: `${currentNode.data.label} has no downstream integration configured for this route, so the request cannot be forwarded to any backend service.`,
+          targetHealth: 'failed',
+          latencyMs: 25,
+          details: {
+            statusCode: 502,
+            failureReason: 'API Gateway route has no backend integration target.'
+          }
+        });
+        overallSuccess = false;
+        finalStatusCode = 502;
+        finalSummary = `${currentNode.data.label} has no configured backend integration for this route.`;
         break;
       }
 
@@ -644,7 +669,7 @@ export function runSimulation(
             overallSuccess = true;
             finalSummary = 'Request succeeded: Multi-AZ database automatically failed over to standby replica.';
             break;
-          } else if (isAurora && hasStandbyCapacity) {
+          } else if (isAurora && dbTarget.data.multiAz && hasStandbyCapacity) {
             steps.push({
               id: `step-${stepNumber++}`,
               stepNumber: steps.length + 1,
@@ -764,7 +789,7 @@ export function runSimulation(
             targetNodeId: queueTarget.id,
             sourceNodeName: currentNode.data.label,
             targetNodeName: queueTarget.data.label,
-            protocol: 'Message',
+            protocol: queueProtocol as any,
             action: 'SQS SendMessage API Unavailable',
             status: 'failed',
             explanation: `${currentNode.data.label} could not publish to ${queueTarget.data.label}. SQS SendMessage did not return HTTP 200, so asynchronous handoff was not accepted.`,
@@ -789,7 +814,7 @@ export function runSimulation(
           targetNodeId: queueTarget.id,
           sourceNodeName: currentNode.data.label,
           targetNodeName: queueTarget.data.label,
-          protocol: 'Message',
+          protocol: queueProtocol as any,
           action: 'SQS SendMessage API Accepted',
           status: 'success',
           explanation: `${currentNode.data.label} called SendMessage on ${queueTarget.data.label} and received HTTP 200 from the SQS API. The application can now choose to return HTTP 202 Accepted to the caller while downstream consumers process asynchronously.`,

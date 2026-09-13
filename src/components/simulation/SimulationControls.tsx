@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
+import { RequestTraceModal } from './RequestTraceModal.tsx';
 import {
   Play,
   Pause,
   RotateCcw,
   SkipForward,
   SkipBack,
-  Gauge,
   Send,
   CheckCircle2,
   XCircle,
-  Route
+  Route as RouteIcon
 } from 'lucide-react';
 
 export const SimulationControls: React.FC = () => {
@@ -20,6 +20,7 @@ export const SimulationControls: React.FC = () => {
     runScenario,
     resetSimulation,
     simulationResult,
+    requestTrace,
     activeStepIndex,
     stepForward,
     stepBackward,
@@ -30,6 +31,8 @@ export const SimulationControls: React.FC = () => {
     highlightTaskFlow,
     toggleTaskFlow
   } = useArchitecture();
+
+  const [isTraceOpen, setIsTraceOpen] = useState(false);
 
   const totalSteps = simulationResult?.steps.length || 0;
   const currentStepNum = activeStepIndex !== null ? activeStepIndex + 1 : 0;
@@ -63,7 +66,6 @@ export const SimulationControls: React.FC = () => {
 
         {/* Traffic Load Selector */}
         <div className="flex items-center gap-1.5 text-xs text-slate-600">
-          <Gauge className="w-3.5 h-3.5 text-slate-400" />
           <span className="font-normal text-slate-500">Load:</span>
           <select
             value={scenario.trafficLevel}
@@ -92,14 +94,24 @@ export const SimulationControls: React.FC = () => {
           onClick={toggleTaskFlow}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
             highlightTaskFlow
-              ? 'bg-blue-50 text-blue-700 border-blue-300 shadow-xs'
+              ? 'bg-circuit-50 text-circuit-700 border-circuit-300 shadow-xs'
               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
           }`}
           title={highlightTaskFlow ? 'Task flow lines highlighted (click to disable)' : 'Click to highlight task flow lines'}
         >
-          <Route className="w-3.5 h-3.5 text-blue-600" />
           <span>Task Flow</span>
-          <span className={`w-1.5 h-1.5 rounded-full ${highlightTaskFlow ? 'bg-blue-600 animate-pulse' : 'bg-slate-300'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${highlightTaskFlow ? 'bg-circuit-600 animate-pulse' : 'bg-slate-300'}`} />
+        </button>
+
+        {/* AWS Decision Trace - WHAT/WHERE/WHY/WHICH-AWS-RULE for the request just simulated */}
+        <button
+          onClick={() => setIsTraceOpen(true)}
+          disabled={!requestTrace}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all"
+          title="See the decision-by-decision AWS explanation for the last request"
+        >
+          <RouteIcon className="w-3.5 h-3.5" />
+          <span>AWS Explanation</span>
         </button>
       </div>
 
@@ -201,6 +213,8 @@ export const SimulationControls: React.FC = () => {
           Ready to simulate flow
         </div>
       )}
+
+      <RequestTraceModal isOpen={isTraceOpen} onClose={() => setIsTraceOpen(false)} />
     </div>
   );
 };

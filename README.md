@@ -14,7 +14,7 @@ Built with React, TypeScript, [@xyflow/react](https://reactflow.dev/), and Tailw
   - Security Groups (stateful, instance-level, allow-list) and Network ACLs (stateless, subnet-level, deny-list) are independently configurable and evaluated in the real order a packet crosses them.
 - **Break things on purpose**: fail an EC2 instance, take down an Availability Zone, remove a NAT Gateway — and watch the simulation explain exactly what happens and why.
 - **Reference architectures**: a library of pre-built, verified diagrams (3-tier VPC, serverless containers with Cognito/API Gateway/Cloud Map, event-driven SQS decoupling, EC2 Auto Scaling failure recovery, NACL vs Security Group, and more) that all pass their own automated tests.
-- **Teaching tools**: student challenges with automated rubric scoring, a presentation/teaching mode, PNG export, and a Markdown/JSON architecture report export.
+- **Interactive tools**: student challenges with automated rubric scoring, PNG export, and a Markdown/JSON architecture report export.
 
 ## Getting started
 

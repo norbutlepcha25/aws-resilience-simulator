@@ -19,14 +19,17 @@ export const ServiceNode = memo((props: any) => {
   const isDegraded = nodeData.health === 'degraded';
   const isSimActive = nodeData.isSimulating;
 
-  // Visual halo for active simulation or failure
+  // Visual halo for active simulation, failure, or degradation - driven entirely by the
+  // simulation/failure engines' real `health`/`isSimulating` state, never decorative.
   let iconWrapperClasses = 'transition-all duration-200';
   if (isFailed) {
     iconWrapperClasses += ' ring-2 ring-rose-500 rounded-lg p-0.5 bg-rose-50';
   } else if (isSimActive) {
     iconWrapperClasses += ' ring-4 ring-amber-400 rounded-lg p-0.5 shadow-lg shadow-amber-300/60 scale-105';
+  } else if (isDegraded) {
+    iconWrapperClasses += ' ring-2 ring-amber-400 rounded-lg p-0.5 bg-amber-50';
   } else if (selected) {
-    iconWrapperClasses += ' ring-2 ring-blue-600 rounded-lg p-0.5 shadow-md shadow-blue-200';
+    iconWrapperClasses += ' ring-2 ring-circuit-600 rounded-lg p-0.5 shadow-md shadow-circuit-200';
   }
 
   return (
@@ -36,13 +39,13 @@ export const ServiceNode = memo((props: any) => {
         type="target"
         position={Position.Left}
         id="target-left"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-blue-600 !border-2 !border-white transition-colors"
+        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white transition-colors"
       />
       <Handle
         type="target"
         position={Position.Top}
         id="target-top"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-blue-600 !border-2 !border-white transition-colors"
+        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white transition-colors"
       />
 
       {/* Official AWS Service Icon */}
@@ -64,6 +67,14 @@ export const ServiceNode = memo((props: any) => {
             ●
           </div>
         )}
+
+        {/* Degraded overlay tag - distinct from Failed (red X): still serving traffic, but not
+            at full health (e.g. one target down behind a load balancer that still has others). */}
+        {isDegraded && !isFailed && !isSimActive && (
+          <div className="absolute -top-2 -right-2 bg-amber-500 text-white rounded-full p-0.5 shadow-md">
+            <AlertTriangle className="w-3.5 h-3.5 fill-current text-white" />
+          </div>
+        )}
       </div>
 
       {/* Clean Service Label under the icon (matches reference diagram) */}
@@ -83,13 +94,13 @@ export const ServiceNode = memo((props: any) => {
         type="source"
         position={Position.Right}
         id="source-right"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-blue-600 !border-2 !border-white transition-colors"
+        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white transition-colors"
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="source-bottom"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-blue-600 !border-2 !border-white transition-colors"
+        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white transition-colors"
       />
     </div>
   );

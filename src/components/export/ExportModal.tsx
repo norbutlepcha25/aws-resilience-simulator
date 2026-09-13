@@ -127,7 +127,7 @@ ${serviceNodesOnly.map(n => `- **${n.data.label}** (${n.data.category}) - Placem
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
       <div className="bg-white border border-slate-200 w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white">
@@ -191,7 +191,7 @@ ${serviceNodesOnly.map(n => `- **${n.data.label}** (${n.data.category}) - Placem
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-circuit-600 hover:bg-circuit-700 text-white text-xs font-bold shadow-xs transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download File</span>

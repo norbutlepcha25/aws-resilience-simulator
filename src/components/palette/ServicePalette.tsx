@@ -6,14 +6,9 @@ import {
   Search,
   Plus,
   ChevronDown,
-  ChevronRight,
-  Filter,
-  Lock,
-  Cloud,
-  Flag,
-  Server,
-  Network
+  ChevronRight
 } from 'lucide-react';
+import { ServiceInfoModal } from './ServiceInfoModal.tsx';
 
 const CATEGORY_COLORS: Record<string, string> = {
   'Compute': '#ED7100',
@@ -155,6 +150,8 @@ export const ServicePalette: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [infoModalServiceId, setInfoModalServiceId] = useState<string | null>(null);
 
   // Extract list of all unique categories
   const allCategoryNames = useMemo(() => {
@@ -233,38 +230,28 @@ export const ServicePalette: React.FC = () => {
   return (
     <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full flex-shrink-0 select-none z-10">
       {/* Top Tab Switcher: Services vs VPC & Boundaries */}
-      <div className="p-2 border-b border-slate-200 bg-white">
-        <div className="grid grid-cols-2 gap-1 bg-slate-100/80 p-0.5 rounded-lg text-xs font-medium">
-          <button
-            onClick={() => setActiveTab('services')}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md transition-all ${
-              activeTab === 'services'
-                ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Server className="w-3.5 h-3.5" />
-            <span>Services</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/80 text-slate-600">
-              {AWS_SERVICES.length}
-            </span>
-          </button>
+      <div className="flex border-b border-slate-200 bg-white text-xs font-medium">
+        <button
+          onClick={() => setActiveTab('services')}
+          className={`flex-1 py-2 border-b-2 transition-colors ${
+            activeTab === 'services'
+              ? 'border-circuit-600 text-slate-900 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Services ({AWS_SERVICES.length})
+        </button>
 
-          <button
-            onClick={() => setActiveTab('boundaries')}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md transition-all ${
-              activeTab === 'boundaries'
-                ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Network className="w-3.5 h-3.5" />
-            <span>VPC & Group</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/80 text-slate-600">
-              {BOUNDARY_DEFINITIONS.length}
-            </span>
-          </button>
-        </div>
+        <button
+          onClick={() => setActiveTab('boundaries')}
+          className={`flex-1 py-2 border-b-2 transition-colors ${
+            activeTab === 'boundaries'
+              ? 'border-circuit-600 text-slate-900 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          VPC & Groups ({BOUNDARY_DEFINITIONS.length})
+        </button>
       </div>
 
       {activeTab === 'boundaries' ? (
@@ -279,97 +266,42 @@ export const ServicePalette: React.FC = () => {
             </p>
           </div>
 
-          <div className="space-y-2 pt-1">
+          <div className="divide-y divide-slate-100 -mx-1">
             {BOUNDARY_DEFINITIONS.map((boundary) => (
               <div
                 key={boundary.id}
                 draggable
                 onDragStart={(e) => onDragStartBoundary(e, boundary.boundaryType)}
                 onClick={() => addBoundaryNode(boundary.boundaryType)}
-                className="group relative p-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing"
+                className="group flex items-start gap-2.5 px-1 py-2.5 cursor-grab active:cursor-grabbing"
               >
-                {/* Visual Preview Header */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    {/* Badge Preview */}
-                    {boundary.iconType === 'cloud' && (
-                      <div
-                        className="w-5 h-5 rounded-xs flex items-center justify-center shadow-2xs"
-                        style={{ backgroundColor: boundary.badgeBg }}
-                      >
-                        <Cloud className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                    {boundary.iconType === 'lock' && (
-                      <div
-                        className="w-5 h-5 rounded-xs flex items-center justify-center shadow-2xs"
-                        style={{ backgroundColor: boundary.badgeBg }}
-                      >
-                        <Lock className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                    {boundary.iconType === 'flag' && (
-                      <div
-                        className="w-5 h-5 rounded-xs flex items-center justify-center shadow-2xs"
-                        style={{ backgroundColor: boundary.badgeBg }}
-                      >
-                        <Flag className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                    {boundary.iconType === 'az' && (
-                      <div className="px-1.5 py-0.5 rounded-xs border border-dashed border-[#0073BB] text-[10px] font-bold text-[#0073BB]">
-                        AZ
-                      </div>
-                    )}
-                    {boundary.iconType === 'sg' && (
-                      <div className="px-1.5 py-0.5 rounded-xs border border-[#EF4444] text-[10px] font-bold text-[#EF4444]">
-                        SG
-                      </div>
-                    )}
+                {/* Color swatch - matches the boundary's actual on-canvas border color */}
+                <span
+                  className={`mt-1 w-2.5 h-2.5 flex-shrink-0 ${boundary.dashed ? 'border border-dashed' : 'border'}`}
+                  style={{ borderColor: boundary.borderColor, backgroundColor: boundary.badgeBg !== 'transparent' ? boundary.borderColor : 'transparent' }}
+                />
 
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 leading-tight">
-                        {boundary.name}
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        {boundary.subtitle}
-                      </div>
-                    </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-900">
+                      {boundary.name}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addBoundaryNode(boundary.boundaryType);
+                      }}
+                      title="Add to canvas"
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-900 transition-opacity flex-shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-
-                  {/* Add Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      addBoundaryNode(boundary.boundaryType);
-                    }}
-                    title="Add boundary to canvas"
-                    className="p-1 rounded-md bg-slate-100 group-hover:bg-emerald-600 group-hover:text-white text-slate-600 transition-all flex-shrink-0 shadow-2xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="text-[10px] text-slate-500">{boundary.subtitle}</div>
+                  <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                    {boundary.description}
+                  </p>
                 </div>
-
-                {/* Container Visual Swatch */}
-                <div
-                  className={`w-full h-8 rounded-md flex items-center justify-center text-[10px] font-mono font-semibold transition-all mb-1.5 ${
-                    boundary.dashed ? 'border-2 border-dashed' : 'border'
-                  }`}
-                  style={{
-                    backgroundColor: boundary.cardBg,
-                    borderColor: boundary.borderColor,
-                    color: boundary.textColor
-                  }}
-                >
-                  <span className="bg-white/90 px-2 py-0.5 rounded-xs text-[10px] font-bold shadow-2xs">
-                    {boundary.badgeLabel}
-                  </span>
-                </div>
-
-                {/* Description */}
-                <p className="text-[10px] text-slate-600 leading-tight">
-                  {boundary.description}
-                </p>
               </div>
             ))}
           </div>
@@ -380,14 +312,9 @@ export const ServicePalette: React.FC = () => {
           {/* Header & Search */}
           <div className="p-3 border-b border-slate-200 bg-white space-y-2.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  AWS Services
-                </h2>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 border border-slate-200 text-slate-600 font-mono font-medium">
-                  {filteredServices.length}
-                </span>
-              </div>
+              <h2 className="text-xs font-semibold text-slate-600">
+                AWS services <span className="text-slate-400 font-normal">({filteredServices.length})</span>
+              </h2>
               <div className="flex items-center gap-1">
                 <button
                   onClick={expandAll}
@@ -425,33 +352,27 @@ export const ServicePalette: React.FC = () => {
                 onClick={() => setActiveTab('boundaries')}
                 className="w-full text-left px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium flex items-center justify-between hover:bg-slate-100 transition-colors"
               >
-                <div className="flex items-center gap-1.5">
-                  <Network className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                  <span>Found {matchingBoundaries.length} boundary containers</span>
-                </div>
+                <span>Found {matchingBoundaries.length} boundary containers</span>
                 <span className="text-[10px] font-medium text-slate-600 underline">View &rarr;</span>
               </button>
             )}
 
             {/* Category Quick Filter Dropdown */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <Filter className="w-3 h-3 text-slate-400 flex-shrink-0" />
-              <select
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                aria-label="Filter by AWS Category"
-                className="w-full text-[11px] py-1 px-2 rounded-md bg-white border border-slate-200 text-slate-700 font-medium focus:outline-none focus:border-slate-400 transition-colors cursor-pointer"
-              >
-                {allCategoryNames.map((cat) => {
-                  const count = cat === 'All' ? AWS_SERVICES.length : AWS_SERVICES.filter(s => s.category === cat).length;
-                  return (
-                    <option key={cat} value={cat}>
-                      {cat} ({count})
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+            <select
+              value={selectedCategoryFilter}
+              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              aria-label="Filter by AWS Category"
+              className="w-full text-[11px] py-1 px-2 rounded-md bg-white border border-slate-200 text-slate-700 font-medium focus:outline-none focus:border-slate-400 transition-colors cursor-pointer"
+            >
+              {allCategoryNames.map((cat) => {
+                const count = cat === 'All' ? AWS_SERVICES.length : AWS_SERVICES.filter(s => s.category === cat).length;
+                return (
+                  <option key={cat} value={cat}>
+                    {cat} ({count})
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           {/* Services List */}
@@ -466,8 +387,7 @@ export const ServicePalette: React.FC = () => {
                     onClick={() => toggleCategory(category)}
                     className="w-full flex items-center justify-between text-left px-2 py-1 rounded-md hover:bg-slate-100 text-slate-700 font-medium transition-colors group"
                   >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
+                    <div className="flex items-center gap-1 min-w-0">
                       <span className="text-[11px] tracking-tight truncate font-semibold text-slate-800">
                         {category}
                       </span>
@@ -486,37 +406,53 @@ export const ServicePalette: React.FC = () => {
 
                   {/* Service Items */}
                   {!isCollapsed && (
-                    <div className="space-y-1 pl-1">
+                    <div className="pl-1 divide-y divide-slate-50">
                       {services.map((service) => {
+                        const isSelected = selectedServiceId === service.id;
                         return (
                           <div
                             key={service.id}
                             draggable
                             onDragStart={(e) => onDragStartService(e, service.id)}
-                            className="group flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200/80 hover:border-slate-400 hover:bg-slate-50/50 cursor-grab active:cursor-grabbing transition-all"
+                            onClick={() => setSelectedServiceId(prev => prev === service.id ? null : service.id)}
+                            className={`group flex items-center gap-2.5 py-1.5 pl-1.5 pr-1 cursor-grab active:cursor-grabbing ${
+                              isSelected ? 'bg-circuit-50/60' : 'hover:bg-slate-50'
+                            }`}
                           >
-                            <div className="flex items-center gap-2.5 overflow-hidden">
-                              <div className="flex-shrink-0">
-                                <AwsServiceIcon serviceId={service.id} size={32} />
+                            <div className="flex-shrink-0">
+                              <AwsServiceIcon serviceId={service.id} size={28} />
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              <div className="text-xs font-semibold text-slate-900 truncate">
+                                {service.name}
                               </div>
-                              <div className="overflow-hidden">
-                                <div className="text-xs font-medium text-slate-900 truncate">
-                                  {service.name}
-                                </div>
-                                <div className="text-[10px] text-slate-500 truncate leading-tight">
-                                  {service.category}
-                                </div>
+                              <div className="text-[10px] text-slate-500 truncate leading-tight">
+                                {service.category}
                               </div>
                             </div>
 
-                            {/* Quick Add Button */}
-                            <button
-                              onClick={() => addServiceNode(service.id)}
-                              title="Add to canvas"
-                              className="opacity-0 group-hover:opacity-100 p-1 rounded bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-600 transition-all flex-shrink-0"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
+                            <div className={`flex items-center gap-2.5 flex-shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInfoModalServiceId(service.id);
+                                }}
+                                title={`View ${service.name} details & storage classes`}
+                                className="text-[11px] font-medium text-circuit-700 hover:underline"
+                              >
+                                Info
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addServiceNode(service.id);
+                                }}
+                                title="Add to canvas"
+                                className="text-slate-400 hover:text-slate-900 transition-colors"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -537,7 +473,7 @@ export const ServicePalette: React.FC = () => {
 
       {/* Palette Footer Tip */}
       <div className="p-2.5 border-t border-slate-200 bg-white text-[10px] text-slate-500 flex items-center justify-between">
-        <span>💡 Drag onto canvas or click <Plus className="w-2.5 h-2.5 inline" /></span>
+        <span>Drag a service onto the canvas to add it</span>
         {activeTab === 'services' && (
           <button
             onClick={() => setActiveTab('boundaries')}
@@ -547,6 +483,15 @@ export const ServicePalette: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Service Architectural Info & Notes Modal Overlay */}
+      {infoModalServiceId && (
+        <ServiceInfoModal
+          serviceId={infoModalServiceId}
+          onClose={() => setInfoModalServiceId(null)}
+          onAddToCanvas={addServiceNode}
+        />
+      )}
     </aside>
   );
 };

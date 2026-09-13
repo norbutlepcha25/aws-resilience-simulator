@@ -52,11 +52,17 @@ export function rectArea(rect: Rect): number {
  * `api_gateway` is deliberately excluded: an HTTP API (the common case, and what this app
  * models) is a fully-managed regional/edge endpoint with no VPC placement at all, unlike an
  * ALB/NLB which always lives in a subnet you own.
+ *
+ * `privatelink` (an Interface VPC Endpoint) IS included: real Interface VPC Endpoints create
+ * actual ENIs in customer-chosen subnets, unlike a Gateway VPC Endpoint (`s3_gateway_endpoint`,
+ * a route-table/prefix-list construct with no ENI at all) - the two endpoint types are
+ * structurally different on exactly this axis and must not share a placement rule.
  */
 export const SUBNET_REQUIRED_SERVICE_IDS = [
   'alb', 'nlb', 'elb', 'app_runner',
   'ec2', 'ecs', 'fargate',
-  'rds', 'aurora', 'elasticache'
+  'rds', 'aurora', 'elasticache',
+  'privatelink'
 ];
 
 export type DerivedSubnet = 'public' | 'private' | 'unassigned' | 'global';
@@ -163,3 +169,64 @@ export function findContainingVpc(
 
   return containingVpcs.length > 0 ? containingVpcs[0].node : null;
 }
+
+/**
+ * Tests whether boundary `parentNode` geometrically contains boundary `childNode`.
+ * `parentNode` contains `childNode` if `parentNode` has a strictly larger area than `childNode`,
+ * and either `childNode`'s center point falls inside `parentNode`'s rectangle, or `childNode`
+ * has significant (>= 40%) geometric area overlap within `parentNode`.
+ */
+export function isBoundaryContained(childNode: Node<any>, parentNode: Node<any>): boolean {
+  if (!childNode || !parentNode || childNode.id === parentNode.id) return false;
+  const childRect = getBoundaryRect(childNode);
+  const parentRect = getBoundaryRect(parentNode);
+
+  const childArea = rectArea(childRect);
+  const parentArea = rectArea(parentRect);
+  if (parentArea <= childArea) return false;
+
+  const childCenter = rectCenter(childRect);
+  if (rectContainsPoint(parentRect, childCenter.x, childCenter.y)) {
+    return true;
+  }
+
+  // Also check intersection area overlap
+  const xOverlap = Math.max(0, Math.min(parentRect.x + parentRect.width, childRect.x + childRect.width) - Math.max(parentRect.x, childRect.x));
+  const yOverlap = Math.max(0, Math.min(parentRect.y + parentRect.height, childRect.y + childRect.height) - Math.max(parentRect.y, childRect.y));
+  const overlapArea = xOverlap * yOverlap;
+
+  return childArea > 0 && overlapArea >= 0.4 * childArea;
+}
+
+/**
+ * Returns the count of enclosing ancestor boundaries that contain `targetBoundary`.
+ * 0 means a top-level boundary (e.g. root Region or Account or freestanding VPC).
+ */
+export function getBoundaryContainmentDepth(
+  targetBoundary: Node<any>,
+  allBoundaryNodes: Node<any>[]
+): number {
+  return allBoundaryNodes.filter(other => isBoundaryContained(targetBoundary, other)).length;
+}
+
+/**
+ * Computes stacking z-index for a boundary node based on its containment hierarchy.
+ * Inner boundaries (children) receive a strictly higher z-index than outer boundaries (ancestors),
+ * ensuring that containers never visually cover or intercept clicks meant for their contents.
+ *
+ * Base mapping:
+ * - Depth 0 (outermost container, e.g. Region or Account): -4
+ * - Depth 1 (e.g. AZ or VPC inside Region): -3
+ * - Depth 2 (e.g. VPC inside AZ, or AZ inside VPC): -2
+ * - Depth 3 (e.g. Subnet inside VPC): -1
+ * - Depth 4 (e.g. Security Group inside Subnet): 0
+ * - Depth 5+: 1, 2...
+ */
+export function calculateBoundaryZIndex(
+  boundaryNode: Node<any>,
+  allBoundaryNodes: Node<any>[]
+): number {
+  const depth = getBoundaryContainmentDepth(boundaryNode, allBoundaryNodes);
+  return -4 + depth;
+}
+

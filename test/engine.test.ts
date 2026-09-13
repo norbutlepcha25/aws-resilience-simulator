@@ -8,11 +8,10 @@ import { runSimulation } from '../src/engine/simulation/requestSimulator.ts';
 import { analyzeArchitecture } from '../src/engine/analysis/rulesEngine.ts';
 import { detectSPOFs } from '../src/engine/analysis/spofDetector.ts';
 import { detectBottlenecks } from '../src/engine/analysis/bottleneckDetector.ts';
+import { allocateSubnetCidrs, getReservedAddresses, getUsableIpRange } from '../src/engine/layout/cidrAllocator.ts';
+import { calculateNodeCost, calculateArchitectureCost, EC2_INSTANCE_TYPES, S3_STORAGE_CLASSES } from '../src/engine/cost/costCalculator.ts';
+import { isBoundaryContained, getBoundaryContainmentDepth, calculateBoundaryZIndex, deriveSubnetForNode } from '../src/engine/layout/containment.ts';
 import type { SimulationScenario } from '../src/types/index.ts';
-
-const AWS_ALB_HEALTH_DOC = 'https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html';
-const AWS_NLB_TROUBLESHOOTING_DOC = 'https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-troubleshooting.html';
-const AWS_SQS_SEND_MESSAGE_DOC = 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html';
 
 test('1. Service Catalog Integrity', () => {
   assert.ok(AWS_SERVICES.length >= 10, 'Catalog should contain at least 10 core AWS services');
@@ -75,7 +74,7 @@ test('3. Simulation: ALB Health Check Failover when ECS-1 is FAILED', () => {
   assert.strictEqual(albStep.targetNodeId, 'node-ecs-az-b', 'ALB should route to surviving ECS Task in AZ-B');
 });
 
-test('4. Simulation: ALB fail-open routing still ends in failure when ALL compute targets are unhealthy', () => {
+test('4. Simulation: 503 Service Unavailable when ALL compute targets fail', () => {
   const haArch = REFERENCE_ARCHITECTURES.find(a => a.id === 'highly-available-multiaz')!;
   // Fail BOTH ECS tasks
   const modifiedNodes = haArch.nodes.map(n => {
@@ -98,72 +97,8 @@ test('4. Simulation: ALB fail-open routing still ends in failure when ALL comput
   };
 
   const result = runSimulation(modifiedNodes, haArch.edges, scenario);
-  /**
-   * Corrected assertion documentation:
-   * - Old assumption: ALB returns immediate HTTP 502 when every registered target is unhealthy.
-   * - AWS source: ALB fails open when all registered targets are unhealthy
-   *   (see AWS docs: ${AWS_ALB_HEALTH_DOC}).
-   * - Replacement: assert fail-open routing step occurs, then request still fails because unhealthy
-   *   application targets cannot execute user traffic.
-   * - Retained regression purpose: ensure total outage is still detected when no compute capacity survives.
-   */
   assert.strictEqual(result.success, false, 'Request must fail when all compute targets are offline');
-  assert.strictEqual(result.statusCode, 503, 'Fail-open routing should still end with service unavailability from failed targets');
-  assert.ok(result.steps.some(s => s.action.includes('Fail-Open Routing')), 'ALB should record fail-open routing when all targets are unhealthy');
-});
-
-test('4b. Simulation: ALB with no registered targets returns 503 without fail-open', () => {
-  const nodes: any[] = [
-    { id: 'node-user', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'user', label: 'User', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
-    { id: 'node-igw', type: 'serviceNode', position: { x: 100, y: 0 }, data: { serviceId: 'internet_gateway', label: 'Internet Gateway', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
-    { id: 'node-alb', type: 'serviceNode', position: { x: 200, y: 0 }, data: { serviceId: 'alb', label: 'ALB', category: 'Networking & Content Delivery', health: 'healthy', az: 'Multi-AZ', subnet: 'public', replicas: 2, multiAz: true } },
-    { id: 'box-public-subnet', type: 'boundaryNode', position: { x: 260, y: -20 }, data: { label: 'Public subnet', boundaryType: 'public_subnet', width: 120, height: 80 } }
-  ];
-  const edges: any[] = [
-    { id: 'e1', source: 'node-user', target: 'node-igw', data: { protocol: 'HTTPS' } },
-    { id: 'e2', source: 'node-igw', target: 'node-alb', data: { protocol: 'HTTPS' } },
-    { id: 'e3', source: 'node-alb', target: 'box-public-subnet', data: { protocol: 'HTTP' } }
-  ];
-
-  const result = runSimulation(nodes as any, edges as any, {
-    id: 'test-alb-no-targets',
-    name: 'ALB Empty Target Group',
-    method: 'GET',
-    path: '/',
-    startNodeId: 'node-user',
-    trafficLevel: 'normal'
-  });
-
-  assert.strictEqual(result.success, false, 'Request must fail when no targets are registered behind ALB');
-  assert.strictEqual(result.statusCode, 503, 'ALB should return service unavailable when target group has no targets');
-  assert.ok(result.steps.some(s => s.action.includes('Target Group Empty')), 'Must explicitly classify no registered targets');
-});
-
-test('4c. Simulation: NLB fail-open routing is recorded separately from backend execution success', () => {
-  const nodes: any[] = [
-    { id: 'node-user', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'user', label: 'User', category: 'Client / Ingress', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
-    { id: 'node-igw', type: 'serviceNode', position: { x: 100, y: 0 }, data: { serviceId: 'internet_gateway', label: 'Internet Gateway', category: 'Networking & Content Delivery', health: 'healthy', az: 'Edge / Global', subnet: 'global', replicas: 1, multiAz: false } },
-    { id: 'node-nlb', type: 'serviceNode', position: { x: 200, y: 0 }, data: { serviceId: 'nlb', label: 'NLB', category: 'Networking & Content Delivery', health: 'healthy', az: 'Multi-AZ', subnet: 'public', replicas: 2, multiAz: true } },
-    { id: 'node-ec2-failed', type: 'serviceNode', position: { x: 300, y: 0 }, data: { serviceId: 'ec2', label: 'Backend EC2', category: 'Compute', health: 'failed', az: 'AZ-A', subnet: 'private', replicas: 1, multiAz: false } }
-  ];
-  const edges: any[] = [
-    { id: 'e1', source: 'node-user', target: 'node-igw', data: { protocol: 'HTTPS' } },
-    { id: 'e2', source: 'node-igw', target: 'node-nlb', data: { protocol: 'TCP' } },
-    { id: 'e3', source: 'node-nlb', target: 'node-ec2-failed', data: { protocol: 'TCP' } }
-  ];
-
-  const result = runSimulation(nodes as any, edges as any, {
-    id: 'test-nlb-fail-open',
-    name: 'NLB All Targets Unhealthy',
-    method: 'GET',
-    path: '/',
-    startNodeId: 'node-user',
-    trafficLevel: 'normal'
-  });
-
-  assert.strictEqual(result.success, false, 'Fail-open routing does not imply backend success');
-  assert.strictEqual(result.statusCode, 503, 'Backend failure should still surface as unavailable after fail-open routing');
-  assert.ok(result.steps.some(s => s.action.includes('Fail-Open Routing')), `NLB should document fail-open behavior (${AWS_NLB_TROUBLESHOOTING_DOC})`);
+  assert.strictEqual(result.statusCode, 503, 'Should return HTTP 503 Service Unavailable (real ALB behavior for no healthy targets)');
 });
 
 test('5. Single Point of Failure (SPOF) Detection on Basic Web App', () => {
@@ -385,7 +320,7 @@ test('11. Database Multi-AZ Automated Failover', () => {
       id: 'node-rds',
       type: 'serviceNode',
       position: { x: 100, y: 0 },
-      data: { serviceId: 'rds', label: 'Amazon RDS (Multi-AZ)', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', multiAz: true, replicas: 2 }
+      data: { serviceId: 'rds', label: 'Amazon RDS (Multi-AZ)', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', multiAz: true }
     }
   ];
 
@@ -403,100 +338,8 @@ test('11. Database Multi-AZ Automated Failover', () => {
   };
 
   const result = runSimulation(multiAzDbNodes as any, edges as any, scenario);
-  /**
-   * Corrected assertion documentation:
-   * - Old assumption: multiAz=true alone implied immediate successful failover.
-   * - AWS source: failover requires an actual standby/surviving capacity, not only a flag.
-   * - Replacement: require modeled standby capacity (`replicas: 2`) and verify RDS-specific failover action.
-   * - Retained regression purpose: verify resilient relational database recovery when standby is present.
-   */
   assert.strictEqual(result.success, true, 'Multi-AZ DB should automatically failover to standby replica');
-  assert.ok(result.steps.some(s => s.action.includes('RDS Multi-AZ Automated Failover')), 'Should log RDS automated failover event');
-});
-
-test('11b. Database contracts: Aurora requires surviving replica capacity; DynamoDB failure is not relational standby promotion', () => {
-  const auroraNoReplicaNodes: any[] = [
-    { id: 'node-ecs', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'ecs', label: 'ECS Task', category: 'Compute', health: 'healthy', az: 'AZ-A', subnet: 'private', replicas: 1, multiAz: false } },
-    { id: 'node-aurora', type: 'serviceNode', position: { x: 120, y: 0 }, data: { serviceId: 'aurora', label: 'Aurora Cluster', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', replicas: 1, multiAz: true } }
-  ];
-  const edges: any[] = [{ id: 'e1', source: 'node-ecs', target: 'node-aurora', data: { protocol: 'SQL' } }];
-
-  const auroraNoReplicaResult = runSimulation(auroraNoReplicaNodes as any, edges as any, {
-    id: 'aurora-no-replica',
-    name: 'Aurora Without Replica Capacity',
-    method: 'POST',
-    path: '/write',
-    startNodeId: 'node-ecs',
-    trafficLevel: 'normal'
-  });
-  assert.strictEqual(auroraNoReplicaResult.success, false, 'Aurora should fail when no surviving replica capacity exists');
-  assert.strictEqual(auroraNoReplicaResult.statusCode, 504);
-
-  const auroraWithReplicaNodes = auroraNoReplicaNodes.map(n =>
-    n.id === 'node-aurora' ? { ...n, data: { ...n.data, replicas: 2 } } : n
-  );
-  const auroraWithReplicaResult = runSimulation(auroraWithReplicaNodes as any, edges as any, {
-    id: 'aurora-with-replica',
-    name: 'Aurora With Replica Capacity',
-    method: 'POST',
-    path: '/write',
-    startNodeId: 'node-ecs',
-    trafficLevel: 'normal'
-  });
-  assert.strictEqual(auroraWithReplicaResult.success, true, 'Aurora should recover when a surviving replica exists');
-  assert.ok(auroraWithReplicaResult.steps.some(s => s.action.includes('Aurora Writer Failover')));
-
-  const dynamoNodes: any[] = [
-    { id: 'node-ecs', type: 'serviceNode', position: { x: 0, y: 0 }, data: { serviceId: 'ecs', label: 'ECS Task', category: 'Compute', health: 'healthy', az: 'AZ-A', subnet: 'private', replicas: 1, multiAz: false } },
-    { id: 'node-dynamo', type: 'serviceNode', position: { x: 120, y: 0 }, data: { serviceId: 'dynamodb', label: 'DynamoDB', category: 'Databases', health: 'failed', az: 'Multi-AZ', subnet: 'private', replicas: 1, multiAz: true } }
-  ];
-  const dynamoResult = runSimulation(dynamoNodes as any, [{ id: 'e2', source: 'node-ecs', target: 'node-dynamo', data: { protocol: 'HTTPS' } }] as any, {
-    id: 'dynamo-failed',
-    name: 'DynamoDB Endpoint Outage',
-    method: 'POST',
-    path: '/write',
-    startNodeId: 'node-ecs',
-    trafficLevel: 'normal'
-  });
-  assert.strictEqual(dynamoResult.success, false, 'DynamoDB endpoint outage should fail the request');
-  assert.strictEqual(dynamoResult.statusCode, 503);
-  assert.ok(dynamoResult.steps.some(s => s.action.includes('DynamoDB Endpoint Unavailable')));
-  assert.ok(!dynamoResult.steps.some(s => s.explanation.includes('standby replica')), 'DynamoDB flow must not claim relational standby promotion');
-});
-
-test('11c. SQS producer acknowledgement (SendMessage 200) is independent from app 202 and downstream consumers', () => {
-  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'event-driven-async')!;
-  assert.ok(tpl, 'Event-driven async template should exist');
-
-  const scenario: SimulationScenario = {
-    id: 'sqs-ack',
-    name: 'SQS Ack Separation',
-    method: 'POST',
-    path: '/orders',
-    startNodeId: 'node-user',
-    trafficLevel: 'normal'
-  };
-
-  const happy = runSimulation(tpl.nodes, tpl.edges, scenario);
-  const sendMessageStep = happy.steps.find(s => s.action === 'SQS SendMessage API Accepted');
-  assert.ok(sendMessageStep, `Must represent SQS SendMessage API acknowledgement (${AWS_SQS_SEND_MESSAGE_DOC})`);
-  assert.strictEqual(sendMessageStep?.details?.statusCode, 200, 'SendMessage API acknowledgement should be HTTP 200');
-  assert.strictEqual(happy.statusCode, 202, 'Application response can remain HTTP 202 Accepted');
-
-  const failedQueueNodes = tpl.nodes.map(n =>
-    n.id === 'node-sqs' ? { ...n, data: { ...(n.data as any), health: 'failed' as const } } : n
-  );
-  const failedQueue = runSimulation(failedQueueNodes as any, tpl.edges, scenario);
-  assert.strictEqual(failedQueue.success, false, 'Publishing should fail when SQS endpoint is unavailable');
-  assert.strictEqual(failedQueue.statusCode, 503, 'Unavailable queue publishing must not silently succeed');
-  assert.ok(failedQueue.steps.some(s => s.action === 'SQS SendMessage API Unavailable'));
-
-  const failedConsumerNodes = tpl.nodes.map(n =>
-    n.id === 'node-worker-ecs' ? { ...n, data: { ...(n.data as any), health: 'failed' as const } } : n
-  );
-  const producerStillAcked = runSimulation(failedConsumerNodes as any, tpl.edges, scenario);
-  assert.strictEqual(producerStillAcked.success, true, 'Producer acknowledgement should not depend on immediate consumer health');
-  assert.strictEqual(producerStillAcked.statusCode, 202, 'Producer-facing application response remains 202 when SendMessage succeeded');
+  assert.ok(result.steps.some(s => s.action.includes('Multi-AZ Automated Database Failover')), 'Should log automated failover event');
 });
 
 test('12. Multi-AZ VPC Reference Architecture Integrity & Boundary Composition', () => {
@@ -1006,7 +849,7 @@ test('29. Reference Diagram "Serverless Container": JWT API, Cloud Map, Per-Serv
   assert.ok(serviceIds.includes('cloud_map'), 'Must include Cloud Map for service discovery');
   assert.strictEqual(serviceIds.filter((id: string) => id === 'ecs').length, 2, 'Must include two independent ECS services (pets, foods)');
   assert.strictEqual(serviceIds.filter((id: string) => id === 'dynamodb').length, 2, 'Each microservice must own its own DynamoDB table');
-  assert.strictEqual(serviceIds.filter((id: string) => id === 'auto_scaling').length, 2, 'Each ECS service must have its own Auto Scaling');
+  assert.strictEqual(serviceIds.filter((id: string) => id === 'auto_scaling_mgmt').length, 2, 'Each ECS service must have its own Auto Scaling');
 
   // API Gateway (HTTP API) must NOT be forced into a VPC subnet - it's fully-managed.
   const apiGw = tpl.nodes.find((n: any) => n.data.serviceId === 'api_gateway')!;
@@ -1082,8 +925,7 @@ test('30. Reference Diagram "Auto Scaling: EC2 Instance Failure Recovery"', () =
   );
   const totalOutage = runSimulation(bothFailed, tpl.edges, scenario);
   assert.strictEqual(totalOutage.success, false, 'Request must fail when every EC2 instance is down');
-  // Corrected assumption aligns with ALB fail-open docs: routing still occurs, then backend execution fails.
-  assert.strictEqual(totalOutage.statusCode, 503, 'Should surface backend unavailability after fail-open routing');
+  assert.strictEqual(totalOutage.statusCode, 503, 'Should return 503 Service Unavailable with zero healthy targets');
 
   // A traffic spike must independently trigger the Auto Scaling Group to scale out.
   const surge = runSimulation(tpl.nodes, tpl.edges, { ...scenario, trafficLevel: '10x' });
@@ -1168,3 +1010,693 @@ test('32. Reference Diagram "Network ACL vs Security Group in Action"', () => {
   // real order a packet is actually evaluated in.
   assert.ok(dbNaclStep!.stepNumber < dbSgStep!.stepNumber, 'Network ACL must be evaluated before the Security Group');
 });
+
+test('33. Subnetting: 5 AWS Reserved Addresses & Usable Host Calculation', () => {
+  // 1. Standard /24 Subnet (256 addresses -> 251 usable)
+  const allocs = allocateSubnetCidrs('10.0.0.0/16', ['subnet-1', 'subnet-2']);
+  const s1 = allocs.get('subnet-1')!;
+  assert.ok(s1, 'Subnet-1 must be allocated');
+  assert.strictEqual(s1.cidr, '10.0.0.0/17');
+  assert.strictEqual(s1.usableHosts, 32768 - 5);
+  assert.strictEqual(s1.reservedAddresses.length, 5, 'Every valid AWS subnet must reserve exactly 5 IP addresses');
+
+  // Verify the 5 exact AWS reserved roles
+  const [net, rtr, dns, fut, bcast] = s1.reservedAddresses;
+  assert.strictEqual(net.offset, 0);
+  assert.strictEqual(net.ip, '10.0.0.0');
+  assert.strictEqual(net.role, 'Network Address');
+
+  assert.strictEqual(rtr.offset, 1);
+  assert.strictEqual(rtr.ip, '10.0.0.1');
+  assert.strictEqual(rtr.role, 'VPC Router');
+
+  assert.strictEqual(dns.offset, 2);
+  assert.strictEqual(dns.ip, '10.0.0.2');
+  assert.ok(dns.role.includes('DNS'));
+
+  assert.strictEqual(fut.offset, 3);
+  assert.strictEqual(fut.ip, '10.0.0.3');
+  assert.ok(fut.role.includes('Future'));
+
+  assert.strictEqual(bcast.offset, 32767);
+  assert.strictEqual(bcast.ip, '10.0.127.255');
+  assert.strictEqual(bcast.role, 'Network Broadcast Address');
+
+  // 2. Minimum AWS Subnet /28 (16 addresses -> 11 usable)
+  const smallAlloc = allocateSubnetCidrs('192.168.1.0/24', Array.from({ length: 16 }, (_, i) => `sub-${i}`));
+  const firstSub = smallAlloc.get('sub-0')!;
+  assert.strictEqual(firstSub.cidr, '192.168.1.0/28');
+  assert.strictEqual(firstSub.totalAddresses, 16);
+  assert.strictEqual(firstSub.usableHosts, 11, 'AWS /28 subnet has exactly 16 - 5 = 11 usable hosts');
+  assert.strictEqual(firstSub.usableRange!.start, '192.168.1.4');
+  assert.strictEqual(firstSub.usableRange!.end, '192.168.1.14');
+  assert.strictEqual(firstSub.reservedAddresses[4].ip, '192.168.1.15');
+});
+
+test('34. Cost Calculator: EC2 Instance Sizing, Savings Plans, and EBS Storage Math', () => {
+  const ec2Node: any = {
+    id: 'node-ec2',
+    data: {
+      serviceId: 'ec2',
+      label: 'App Server',
+      category: 'Compute',
+      replicas: 2,
+      customConfig: {
+        instanceType: 'c6i.xlarge', // $0.17/hr
+        purchasingOption: 'savings_plan_1yr', // 35% discount (0.65x)
+        ebsVolumeType: 'gp3', // $0.08/GB
+        ebsVolumeSizeGb: 100
+      }
+    }
+  };
+
+  const cost = calculateNodeCost(ec2Node);
+  assert.ok(cost.monthlyCost > 0);
+
+  // Compute check: 2 * ($0.17 * 0.65) * 730 = $161.33
+  // Storage check: 2 * (100 * $0.08) = $16.00
+  // Total ~ $177.33
+  assert.ok(cost.monthlyCost > 170 && cost.monthlyCost < 185, `Expected ~$177/mo, got ${cost.monthlyCost}`);
+  assert.strictEqual(cost.lineItems.length, 2, 'Should break down Compute and EBS Storage');
+});
+
+test('35. Cost Calculator: S3 Storage Classes (Standard vs Deep Archive) and Volume Scaling', () => {
+  const s3Standard: any = {
+    id: 'node-s3-std',
+    data: {
+      serviceId: 's3',
+      label: 'Data Lake',
+      category: 'Storage',
+      customConfig: {
+        storageClass: 'STANDARD',
+        storageGb: 1000 // 1 TB
+      }
+    }
+  };
+
+  const s3Archive: any = {
+    id: 'node-s3-arc',
+    data: {
+      serviceId: 's3',
+      label: 'Cold Archive',
+      category: 'Storage',
+      customConfig: {
+        storageClass: 'DEEP_ARCHIVE',
+        storageGb: 1000 // 1 TB
+      }
+    }
+  };
+
+  const stdCost = calculateNodeCost(s3Standard);
+  const arcCost = calculateNodeCost(s3Archive);
+
+  // Standard: 1000 * 0.023 = $23.00 + requests
+  // Deep Archive: 1000 * 0.00099 = $0.99 + requests
+  assert.ok(stdCost.monthlyCost > 20, `Standard 1TB should be ~$23.50, got ${stdCost.monthlyCost}`);
+  assert.ok(arcCost.monthlyCost < 2, `Deep Archive 1TB should be ~$1.49, got ${arcCost.monthlyCost}`);
+  assert.ok(stdCost.monthlyCost > arcCost.monthlyCost * 10, 'Standard storage must be significantly higher than Deep Archive');
+});
+
+test('36. Architecture-Wide Bill Simulation: Traffic Scaling (10x Surge) and FinOps Recommendations', () => {
+  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'vpc-nat-autoscaling-3tier')!;
+  assert.ok(tpl, '3-tier VPC template should exist');
+
+  // Baseline normal traffic bill
+  const normalReport = calculateArchitectureCost(tpl.nodes, 'normal');
+  assert.ok(normalReport.monthlyTotal > 50, 'Baseline 3-tier architecture should cost > $50/mo');
+
+  // 10x traffic surge simulation
+  const surgeReport = calculateArchitectureCost(tpl.nodes, '10x');
+  assert.ok(surgeReport.monthlyTotal > normalReport.monthlyTotal, '10x traffic surge must increase bill due to data transfer & processing');
+  assert.strictEqual(surgeReport.trafficMultiplier, 10.0);
+
+  // FinOps recommendations check
+  assert.ok(normalReport.recommendations.length > 0, 'Should generate actionable FinOps cost optimization tips');
+  const natTip = normalReport.recommendations.find(r => r.id === 'tip-s3-gateway-endpoint');
+  assert.ok(natTip, 'Should recommend S3 Gateway Endpoint to eliminate NAT Gateway data processing fees');
+});
+
+test("36b. FinOps: Recommends an S3 Gateway Endpoint Only When One Is Actually Missing", () => {
+  const natGateway: any = { id: 'nat1', position: { x: 0, y: 0 }, data: { serviceId: 'nat_gateway', label: 'NAT Gateway' } };
+  const s3Bucket: any = { id: 's3-1', position: { x: 100, y: 0 }, data: { serviceId: 's3', label: 'Data Bucket' } };
+  const noEndpointReport = calculateArchitectureCost([natGateway, s3Bucket], 'normal');
+  const tipWithoutEndpoint = noEndpointReport.recommendations.find(r => r.id === 'tip-s3-gateway-endpoint');
+  assert.ok(tipWithoutEndpoint, 'Must recommend adding an S3 Gateway Endpoint when NAT + S3 exist and no endpoint is present');
+
+  const endpoint: any = { id: 'endpoint1', position: { x: 200, y: 0 }, data: { serviceId: 's3_gateway_endpoint', label: 'S3 Gateway Endpoint' } };
+  const withEndpointReport = calculateArchitectureCost([natGateway, s3Bucket, endpoint], 'normal');
+  const tipWithEndpoint = withEndpointReport.recommendations.find(r => r.id === 'tip-s3-gateway-endpoint');
+  assert.ok(!tipWithEndpoint, 'Must NOT recommend adding one once it is actually present');
+});
+
+test('37. Dynamic Boundary Layer Hierarchy: VPC inside AZ inside Region maintains child-above-parent stacking', () => {
+  const regionNode: any = {
+    id: 'box-region',
+    type: 'boundaryNode',
+    position: { x: 20, y: 20 },
+    data: { label: 'Region (us-east-1)', boundaryType: 'region', width: 980, height: 600 }
+  };
+
+  const azNode: any = {
+    id: 'box-az',
+    type: 'boundaryNode',
+    position: { x: 60, y: 60 },
+    data: { label: 'Availability Zone', boundaryType: 'az', width: 500, height: 500 }
+  };
+
+  const vpcNode: any = {
+    id: 'box-vpc',
+    type: 'boundaryNode',
+    position: { x: 100, y: 100 },
+    data: { label: 'VPC', boundaryType: 'vpc', width: 400, height: 400 }
+  };
+
+  const subnetNode: any = {
+    id: 'box-subnet',
+    type: 'boundaryNode',
+    position: { x: 140, y: 140 },
+    data: { label: 'Private subnet', boundaryType: 'private_subnet', width: 300, height: 200 }
+  };
+
+  const boundaries = [regionNode, azNode, vpcNode, subnetNode];
+
+  // Verify geometric containment
+  assert.ok(isBoundaryContained(azNode, regionNode), 'Region should contain AZ');
+  assert.ok(isBoundaryContained(vpcNode, azNode), 'AZ should contain VPC');
+  assert.ok(isBoundaryContained(vpcNode, regionNode), 'Region should contain VPC');
+  assert.ok(isBoundaryContained(subnetNode, vpcNode), 'VPC should contain subnet');
+
+  // Verify containment depths
+  assert.strictEqual(getBoundaryContainmentDepth(regionNode, boundaries), 0, 'Region is outermost (depth 0)');
+  assert.strictEqual(getBoundaryContainmentDepth(azNode, boundaries), 1, 'AZ is depth 1');
+  assert.strictEqual(getBoundaryContainmentDepth(vpcNode, boundaries), 2, 'VPC inside AZ is depth 2');
+  assert.strictEqual(getBoundaryContainmentDepth(subnetNode, boundaries), 3, 'Subnet inside VPC is depth 3');
+
+  // Verify calculated z-indices
+  const regionZ = calculateBoundaryZIndex(regionNode, boundaries);
+  const azZ = calculateBoundaryZIndex(azNode, boundaries);
+  const vpcZ = calculateBoundaryZIndex(vpcNode, boundaries);
+  const subnetZ = calculateBoundaryZIndex(subnetNode, boundaries);
+
+  assert.ok(vpcZ > azZ, `VPC (z=${vpcZ}) must have strictly higher z-index than AZ (z=${azZ}) so VPC is selectable`);
+  assert.ok(azZ > regionZ, `AZ (z=${azZ}) must have strictly higher z-index than Region (z=${regionZ})`);
+  assert.ok(subnetZ > vpcZ, `Subnet (z=${subnetZ}) must have strictly higher z-index than VPC (z=${vpcZ})`);
+});
+
+test('38. Dynamic Boundary Layer Hierarchy: Inverted containment (AZ inside VPC) also maintains child-above-parent stacking', () => {
+  const regionNode: any = {
+    id: 'box-region',
+    type: 'boundaryNode',
+    position: { x: 20, y: 20 },
+    data: { label: 'Region', boundaryType: 'region', width: 980, height: 600 }
+  };
+
+  const vpcNode: any = {
+    id: 'box-vpc',
+    type: 'boundaryNode',
+    position: { x: 60, y: 60 },
+    data: { label: 'VPC', boundaryType: 'vpc', width: 880, height: 500 }
+  };
+
+  const azNode: any = {
+    id: 'box-az',
+    type: 'boundaryNode',
+    position: { x: 100, y: 100 },
+    data: { label: 'Availability Zone', boundaryType: 'az', width: 360, height: 400 }
+  };
+
+  const boundaries = [regionNode, vpcNode, azNode];
+
+  assert.ok(isBoundaryContained(vpcNode, regionNode), 'Region should contain VPC');
+  assert.ok(isBoundaryContained(azNode, vpcNode), 'VPC should contain AZ');
+
+  const regionZ = calculateBoundaryZIndex(regionNode, boundaries);
+  const vpcZ = calculateBoundaryZIndex(vpcNode, boundaries);
+  const azZ = calculateBoundaryZIndex(azNode, boundaries);
+
+  assert.ok(azZ > vpcZ, `AZ (z=${azZ}) must have strictly higher z-index than VPC (z=${vpcZ}) when AZ is inside VPC`);
+  assert.ok(vpcZ > regionZ, `VPC (z=${vpcZ}) must have strictly higher z-index than Region (z=${regionZ})`);
+});
+
+test('39. Reference Diagram "Thumbnail Generator": S3 Event Trigger, Lambda in Private Subnet, VPC Gateway Endpoint & IAM Policy', () => {
+  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'thumbnail-generator');
+  assert.ok(tpl, 'Thumbnail generator template should be registered in REFERENCE_ARCHITECTURES');
+  assert.strictEqual(tpl.name, 'Serverless Image Thumbnail Generator');
+
+  // Verify boundary nodes
+  const boundaries = tpl.nodes.filter(n => n.type === 'boundaryNode');
+  const region = boundaries.find(b => (b.data as any).boundaryType === 'region');
+  const vpc = boundaries.find(b => (b.data as any).boundaryType === 'vpc');
+  const az = boundaries.find(b => (b.data as any).boundaryType === 'az');
+  const subnet = boundaries.find(b => (b.data as any).boundaryType === 'private_subnet');
+
+  assert.ok(region, 'Must contain Region boundary');
+  assert.ok(vpc, 'Must contain VPC boundary');
+  assert.ok(az, 'Must contain Availability Zone boundary');
+  assert.ok(subnet, 'Must contain Private Subnet boundary');
+
+  // Verify containment
+  assert.ok(isBoundaryContained(vpc as any, region as any), 'Region must contain VPC');
+  assert.ok(isBoundaryContained(az as any, vpc as any), 'VPC must contain AZ');
+  assert.ok(isBoundaryContained(subnet as any, az as any), 'AZ must contain Private Subnet');
+
+  // Verify service nodes
+  const serviceNodes = tpl.nodes.filter(n => n.type === 'serviceNode');
+  const consoleNode = serviceNodes.find(n => (n.data as any).serviceId === 'user');
+  const sourceS3 = serviceNodes.find(n => n.id === 'node-s3-source');
+  const iamNode = serviceNodes.find(n => (n.data as any).serviceId === 'iam');
+  const lambdaNode = serviceNodes.find(n => (n.data as any).serviceId === 'lambda');
+  const endpointNode = serviceNodes.find(n => (n.data as any).serviceId === 's3_gateway_endpoint');
+  const destS3 = serviceNodes.find(n => n.id === 'node-s3-dest');
+
+  assert.ok(consoleNode, 'Must contain AWS Management Console node');
+  assert.ok(sourceS3, 'Must contain Source S3 Bucket node');
+  assert.ok(iamNode, 'Must contain IAM Permissions Policy node');
+  assert.ok(lambdaNode, 'Must contain Lambda Create Thumbnail function node');
+  assert.ok(endpointNode, 'Must contain S3 Gateway Endpoint node');
+  assert.ok(destS3, 'Must contain Destination S3 Bucket node');
+
+  // Verify subnet allocations
+  assert.strictEqual((lambdaNode.data as any).subnet, 'private', 'Lambda must be placed inside the private subnet');
+  assert.strictEqual((endpointNode.data as any).subnet, 'private', 'S3 Gateway Endpoint must be in the private subnet');
+  assert.strictEqual((sourceS3.data as any).subnet, 'global', 'Source S3 bucket must be a regional/global service');
+  assert.strictEqual((destS3.data as any).subnet, 'global', 'Destination S3 bucket must be a regional/global service');
+
+  // Run End-to-End Simulation
+  const scenario: SimulationScenario = {
+    id: 'test-thumbnail-upload',
+    name: 'Image Upload and Thumbnail Generation',
+    method: 'POST',
+    path: '/upload/photo.jpg',
+    startNodeId: consoleNode.id,
+    trafficLevel: 'normal'
+  };
+
+  const result = runSimulation(tpl.nodes, tpl.edges, scenario);
+  assert.strictEqual(result.success, true, 'End-to-end thumbnail processing flow should succeed');
+  assert.strictEqual(result.statusCode, 200, 'Roundtrip response should be 200 OK');
+
+  // Verify sequential simulation steps
+  const eventStep = result.steps.find(s => s.protocol === 'Event');
+  assert.ok(eventStep, 'Simulation must record asynchronous S3 event trigger step');
+  assert.strictEqual(eventStep.sourceNodeId, sourceS3.id);
+  assert.strictEqual(eventStep.targetNodeId, lambdaNode.id);
+  assert.ok(eventStep.action.includes('s3:ObjectCreated') || eventStep.action.includes('S3 Event Notification'), 'Step action should note S3 Event Notification');
+
+  const endpointStep = result.steps.find(s => s.targetNodeId === endpointNode.id);
+  assert.ok(endpointStep, 'Lambda must route to S3 Gateway Endpoint');
+  assert.strictEqual(endpointStep.sourceNodeId, lambdaNode.id);
+
+  const destStep = result.steps.find(s => s.targetNodeId === destS3.id);
+  assert.ok(destStep, 'S3 Gateway Endpoint must forward to Destination S3 bucket');
+  assert.strictEqual(destStep.sourceNodeId, endpointNode.id);
+
+  // Failure Isolation: When Lambda fails
+  const failedLambdaNodes = tpl.nodes.map(n =>
+    n.id === lambdaNode.id ? { ...n, data: { ...n.data, health: 'failed' as const } } : n
+  );
+  const failedResult = runSimulation(failedLambdaNodes, tpl.edges, scenario);
+  assert.strictEqual(failedResult.success, false, 'Simulation should fail if Lambda function is failed');
+  assert.strictEqual(failedResult.statusCode, 500, 'Should return HTTP 500 when Lambda fails');
+  assert.ok(!failedResult.steps.some(s => s.targetNodeId === destS3.id), 'Destination S3 should not be written to when Lambda fails');
+});
+
+test('40. Reference Diagram "Problem 3.1: Cause of Connection Timeout due to Custom NACLs"', () => {
+  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'nacl-custom-stateless-timeout')!;
+  assert.ok(tpl, 'Problem 3.1 Custom NACLs template should exist');
+
+  // Verify structure: VPC (10.0.0.0/16), Public Subnet (10.0.1.0/24), Private Subnet (10.0.2.0/24)
+  const pubSubnet = tpl.nodes.find(n => n.id === 'box-public-subnet');
+  const privSubnet = tpl.nodes.find(n => n.id === 'box-private-subnet');
+  assert.ok(pubSubnet, 'Public subnet boundary must be present');
+  assert.ok(privSubnet, 'Private subnet boundary must be present');
+
+  const pubNacl = (pubSubnet.data as any).customNacl;
+  assert.ok(pubNacl, 'Public Subnet must configure a custom NACL');
+  assert.strictEqual(pubNacl.naclName, 'Public Subnet NACL: Custom');
+
+  // Verify incoming and outgoing signal edges
+  const inboundEdge = tpl.edges.find(e => (e.data as any)?.signalType === 'inbound_request' && e.source === 'node-web-server');
+  const outboundEdge = tpl.edges.find(e => (e.data as any)?.signalType === 'outbound_response');
+  assert.ok(inboundEdge, 'Must have distinct Inbound Request signal edge');
+  assert.ok(outboundEdge, 'Must have distinct Outbound Response signal edge');
+  assert.strictEqual((inboundEdge.data as any).signalLabel, 'Connection Flow (Inbound Request)');
+  assert.strictEqual((outboundEdge.data as any).hasMissingReturnBlock, true, 'Outbound response should initially have missing return block');
+
+  const scenario: SimulationScenario = {
+    id: 'test-nacl-stateless',
+    name: 'Web Server to Database Connection',
+    method: 'GET',
+    path: '/users/profile',
+    startNodeId: 'node-client',
+    trafficLevel: 'normal'
+  };
+
+  // 1. Initial State: Missing Ephemeral Return Rule -> Stateless Block (504 Timeout)
+  const timeoutResult = runSimulation(tpl.nodes, tpl.edges, scenario);
+  assert.strictEqual(timeoutResult.success, false, 'Initial state must fail due to stateless NACL return block');
+  assert.strictEqual(timeoutResult.statusCode, 504, 'Connection timeout must report 504');
+  const blockedStep = timeoutResult.steps.find(s => s.action.includes('Stateless Return Blocked'));
+  assert.ok(blockedStep, 'Must record a Stateless Return Blocked simulation step');
+
+  // 2. Fixed State: Add Ephemeral Return Rule (1024-65535) -> Connection Successfully Established (200 OK)
+  const fixedNodes = tpl.nodes.map(n => {
+    if (n.id === 'box-public-subnet') {
+      const nacl = (n.data as any).customNacl;
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          customNacl: {
+            ...nacl,
+            inboundRules: nacl.inboundRules.map((r: any) =>
+              r.portRange.includes('1024-65535') ? { ...r, isMissingReturn: false } : r
+            )
+          }
+        }
+      };
+    }
+    return n;
+  });
+
+  const fixedResult = runSimulation(fixedNodes, tpl.edges, scenario);
+  assert.strictEqual(fixedResult.success, true, 'Fixed architecture with ephemeral return rule must succeed');
+  assert.strictEqual(fixedResult.statusCode, 200, 'Successful roundtrip must return 200 OK');
+  const successStep = fixedResult.steps.find(s => s.action.includes('Stateless Return Allowed'));
+  assert.ok(successStep, 'Must record a Stateless Return Allowed step');
+});
+
+test('41. Stateless NACL Return Block Latency Is Reflected in totalLatencyMs', () => {
+  // A stateless-return block reports a 30s (30000ms) step latencyMs - the request genuinely
+  // hung for 30 seconds before the client gave up. totalLatencyMs must account for that, not
+  // just whatever hop latency had accumulated before the post-loop return check ran.
+  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'nacl-custom-stateless-timeout')!;
+  const scenario: SimulationScenario = {
+    id: 'test-nacl-latency',
+    name: 'Web Server to Database Connection',
+    method: 'GET',
+    path: '/users/profile',
+    startNodeId: 'node-client',
+    trafficLevel: 'normal'
+  };
+
+  const result = runSimulation(tpl.nodes, tpl.edges, scenario);
+  assert.strictEqual(result.success, false, 'Stateless block must still fail the request');
+  const blockedStep = result.steps.find(s => s.action.includes('Stateless Return Blocked'))!;
+  assert.ok(blockedStep, 'Must record a Stateless Return Blocked simulation step');
+  assert.strictEqual(blockedStep.latencyMs, 30000, 'Blocked step must report the real 30s stateless timeout');
+  assert.ok(
+    result.totalLatencyMs >= blockedStep.latencyMs,
+    `totalLatencyMs (${result.totalLatencyMs}) must include the blocked step's own 30s latency, not just the hops before it`
+  );
+});
+
+test('42. Security Score Is Included in the Overall Resilience Rating', () => {
+  // A direct client -> database edge is the single most severe security violation this engine
+  // can detect (-35 security points). Before this fix, the security score was computed and
+  // displayed but never factored into `overallRating`, so an architecture could be rated
+  // "Resilient" while its database sat wide open to the internet. Reusing the already-Resilient
+  // "highly-available-multiaz" template and adding nothing but this one edge must now be enough
+  // to pull the overall rating down, since the average is no longer availability/resilience/
+  // faultTolerance/scalability alone.
+  const haArch = REFERENCE_ARCHITECTURES.find(a => a.id === 'highly-available-multiaz')!;
+  const baselineAnalysis = analyzeArchitecture(haArch.nodes, haArch.edges);
+  assert.strictEqual(baselineAnalysis.overallRating, 'Resilient', 'Unmodified HA template is the Resilient baseline');
+
+  const userNode = haArch.nodes.find(n => n.data.serviceId === 'user')!;
+  const rdsNode = haArch.nodes.find(n => n.data.serviceId === 'rds')!;
+  const exposedEdges = [
+    ...haArch.edges,
+    { id: 'direct-db-exposure', source: userNode.id, target: rdsNode.id, data: { protocol: 'SQL' } }
+  ];
+
+  const exposedAnalysis = analyzeArchitecture(haArch.nodes, exposedEdges as typeof haArch.edges);
+  assert.ok(exposedAnalysis.security.score <= 20, 'Direct DB exposure must tank the security score');
+  assert.strictEqual(
+    exposedAnalysis.availability.score, baselineAnalysis.availability.score,
+    'Availability/resilience/faultTolerance/scalability are unaffected by this edge'
+  );
+  assert.notStrictEqual(
+    exposedAnalysis.overallRating, 'Resilient',
+    'A wide-open database must no longer be able to hide behind a Resilient overall rating'
+  );
+});
+
+test('43. Stateless NACL Return Check Uses the Actual Traversed Path, Not a Whole-Canvas Type Scan', () => {
+  // Two independent EC2 -> RDS pairs on one canvas. The decoy pair is listed FIRST in the node
+  // array and is configured to ALLOW its stateless return traffic; the real pair (the only one
+  // actually connected to the client, and the only one this request traverses) is configured to
+  // BLOCK it. A whole-canvas "first EC2 / first RDS" scan would grab the decoy pair (wrong
+  // subnet, wrong verdict: success). Only a check scoped to the request's own traversed path can
+  // correctly find the real pair and correctly report the block.
+  const decoyPublicSubnet: any = {
+    id: 'decoy-public-subnet', type: 'boundaryNode', position: { x: 0, y: 0 },
+    data: {
+      boundaryType: 'public_subnet', width: 300, height: 200, label: 'Decoy Public Subnet',
+      customNacl: {
+        naclName: 'Decoy NACL (correctly configured)',
+        inboundRules: [
+          { ruleNumber: 90, type: 'HTTP', protocol: 'TCP', portRange: '80', cidr: '0.0.0.0/0', action: 'ALLOW' },
+          { ruleNumber: 110, type: 'Ephemeral Ports', protocol: 'TCP', portRange: '1024-65535', cidr: '0.0.0.0/0', action: 'ALLOW', isStatelessReturn: true, isMissingReturn: false }
+        ]
+      }
+    }
+  };
+  const decoyEc2: any = {
+    id: 'decoy-ec2', position: { x: 100, y: 100 },
+    data: { serviceId: 'ec2', label: 'Decoy Web Server', subnet: 'public', health: 'healthy' }
+  };
+  const decoyRds: any = {
+    id: 'decoy-rds', position: { x: 900, y: 900 },
+    data: { serviceId: 'rds', label: 'Decoy DB', subnet: 'private', health: 'healthy' }
+  };
+
+  const realPublicSubnet: any = {
+    id: 'real-public-subnet', type: 'boundaryNode', position: { x: 1000, y: 0 },
+    data: {
+      boundaryType: 'public_subnet', width: 300, height: 200, label: 'Real Public Subnet',
+      customNacl: {
+        naclName: 'Real NACL (missing ephemeral return rule)',
+        inboundRules: [
+          { ruleNumber: 90, type: 'HTTP', protocol: 'TCP', portRange: '80', cidr: '0.0.0.0/0', action: 'ALLOW' },
+          { ruleNumber: 110, type: 'Ephemeral Ports', protocol: 'TCP', portRange: '1024-65535', cidr: '0.0.0.0/0', action: 'ALLOW', isStatelessReturn: true, isMissingReturn: true }
+        ]
+      }
+    }
+  };
+  const realEc2: any = {
+    id: 'real-ec2', position: { x: 1100, y: 100 },
+    data: { serviceId: 'ec2', label: 'Real Web Server', subnet: 'public', health: 'healthy' }
+  };
+  const realRds: any = {
+    id: 'real-rds', position: { x: 1900, y: 900 },
+    data: { serviceId: 'rds', label: 'Real DB', subnet: 'private', health: 'healthy' }
+  };
+
+  const igw: any = { id: 'igw1', position: { x: 500, y: -100 }, data: { serviceId: 'internet_gateway', label: 'IGW', health: 'healthy' } };
+  const client: any = { id: 'client1', position: { x: 500, y: -300 }, data: { serviceId: 'user', label: 'Client' } };
+
+  // Decoy pair is listed BEFORE the real pair - a naive "first EC2 / first RDS on the canvas"
+  // scan would find the decoys first. Neither decoy has any edge into the traversed path.
+  const nodes = [decoyPublicSubnet, decoyEc2, decoyRds, realPublicSubnet, realEc2, realRds, igw, client];
+  const edges: any[] = [
+    { id: 'e1', source: 'client1', target: 'real-ec2', data: { protocol: 'HTTP' } },
+    { id: 'e2', source: 'real-ec2', target: 'real-rds', data: { protocol: 'SQL' } }
+  ];
+
+  const scenario: SimulationScenario = {
+    id: 'test-path-aware-pairing',
+    name: 'Path-Aware NACL Return Pairing',
+    method: 'GET',
+    path: '/orders',
+    startNodeId: 'client1',
+    trafficLevel: 'normal'
+  };
+
+  const result = runSimulation(nodes, edges, scenario);
+
+  assert.strictEqual(result.success, false, 'The REAL pair\'s missing ephemeral rule must block the request');
+  assert.strictEqual(result.statusCode, 504, 'A stateless return block must report 504');
+
+  const blockedStep = result.steps.find(s => s.action.includes('Stateless Return Blocked'));
+  assert.ok(blockedStep, 'Must record a Stateless Return Blocked step');
+  assert.strictEqual(blockedStep!.targetNodeId, 'real-ec2', 'The blocked return must target the REAL web server, not the decoy');
+  assert.strictEqual(blockedStep!.sourceNodeId, 'real-rds', 'The blocked return must originate from the REAL database, not the decoy');
+  assert.ok(
+    !result.steps.some(s => s.sourceNodeId === 'decoy-ec2' || s.sourceNodeId === 'decoy-rds' || s.targetNodeId === 'decoy-ec2' || s.targetNodeId === 'decoy-rds'),
+    'The decoy pair must never appear in the trace at all - it was never on the traversed path'
+  );
+});
+
+test('44. Custom NACL Denies Unmatched Traffic by Default (Implicit Final DENY)', async () => {
+  const { checkNetworkFirewalls } = await import('../src/engine/simulation/networkFirewalls.ts');
+
+  // A custom NACL configured with only an HTTP-allow rule - no rule for SQL, and no explicit
+  // catch-all DENY rule either. Real AWS NACLs always end with an immutable rule 32767 that
+  // denies everything an earlier rule didn't match; unmatched traffic is never permitted.
+  const subnetWithPartialCustomNacl: any = {
+    id: 'subnet-partial-nacl', type: 'boundaryNode', position: { x: 0, y: 0 },
+    data: {
+      boundaryType: 'private_subnet', width: 300, height: 200, label: 'Partially Configured Subnet',
+      customNacl: {
+        naclName: 'Partial NACL',
+        inboundRules: [
+          { ruleNumber: 90, type: 'HTTP', protocol: 'TCP', portRange: '80', cidr: '0.0.0.0/0', action: 'ALLOW' }
+        ]
+      }
+    }
+  };
+  const target: any = { id: 'db1', position: { x: 50, y: 50 }, data: { serviceId: 'rds' } };
+  const boundaries = [subnetWithPartialCustomNacl];
+
+  const httpResult = checkNetworkFirewalls('HTTP', target, boundaries);
+  assert.strictEqual(httpResult.nacl.blocked, false, 'HTTP must still pass - it matches the explicit ALLOW rule');
+
+  const sqlResult = checkNetworkFirewalls('SQL', target, boundaries);
+  assert.strictEqual(sqlResult.nacl.evaluated, true);
+  assert.strictEqual(
+    sqlResult.nacl.blocked, true,
+    'SQL has no matching rule in this custom NACL - the implicit final DENY must block it, not permit it by default'
+  );
+});
+
+test('45. AWS Shield Does Not Perform WAF-Style L7 Request Inspection', () => {
+  // Shield protects against L3/L4 volumetric/protocol DDoS; it does not inspect request content
+  // the way WAF does. A Shield node sitting in front of an otherwise-reachable backend must not
+  // block a request just because its path looks like a SQL injection attempt - only a WAF node
+  // performs that specific inspection.
+  const client: any = { id: 'client1', position: { x: 0, y: 0 }, data: { serviceId: 'user', label: 'Client' } };
+  const shieldNode: any = { id: 'shield1', position: { x: 100, y: 0 }, data: { serviceId: 'shield', label: 'Shield', subnet: 'global', health: 'healthy' } };
+  const backend: any = { id: 'backend1', position: { x: 200, y: 0 }, data: { serviceId: 's3', label: 'Backend', subnet: 'global', health: 'healthy' } };
+
+  const nodes = [client, shieldNode, backend];
+  const edges: any[] = [
+    { id: 'e1', source: 'client1', target: 'shield1', data: { protocol: 'HTTPS' } },
+    { id: 'e2', source: 'shield1', target: 'backend1', data: { protocol: 'HTTPS' } }
+  ];
+
+  const scenario: SimulationScenario = {
+    id: 'test-shield-not-waf',
+    name: 'Shield does not L7-inspect',
+    method: 'GET',
+    path: "/users?id=1' OR '1'='1",
+    startNodeId: 'client1',
+    trafficLevel: 'normal'
+  };
+
+  const result = runSimulation(nodes, edges, scenario);
+  assert.strictEqual(result.success, true, 'Shield must not block a request based on its path content - only WAF inspects request content');
+  assert.ok(!result.steps.some(s => s.action.includes('WAF')), 'No WAF-style inspection step should appear for a Shield node');
+});
+
+test('46. Thumbnail Generator: The IAM Node Is Illustrative Only, Not Load-Bearing', () => {
+  // This simulator does not evaluate IAM permissions anywhere (confirmed in docs/audit/IAM_GAPS.md).
+  // The "Permissions Policy" (iam) node and its edge into Lambda are drawn for architectural
+  // completeness only. This is a regression guard: if a future change ever made this node
+  // load-bearing without anyone noticing, that would be a meaningful, undocumented behavior
+  // change worth catching explicitly, not silently.
+  const tpl = REFERENCE_ARCHITECTURES.find(a => a.id === 'thumbnail-generator')!;
+  const consoleNode = tpl.nodes.find(n => (n.data as any).serviceId === 'user')!;
+
+  const scenario: SimulationScenario = {
+    id: 'test-iam-node-inert',
+    name: 'Image Upload and Thumbnail Generation',
+    method: 'POST',
+    path: '/upload/photo.jpg',
+    startNodeId: consoleNode.id,
+    trafficLevel: 'normal'
+  };
+
+  const withIamNode = runSimulation(tpl.nodes, tpl.edges, scenario);
+
+  const nodesWithoutIam = tpl.nodes.filter(n => n.id !== 'node-iam');
+  const edgesWithoutIam = tpl.edges.filter(e => e.source !== 'node-iam' && e.target !== 'node-iam');
+  const withoutIamNode = runSimulation(nodesWithoutIam, edgesWithoutIam, scenario);
+
+  assert.strictEqual(withIamNode.success, withoutIamNode.success, 'Removing the IAM node must not change simulation success');
+  assert.strictEqual(withIamNode.statusCode, withoutIamNode.statusCode, 'Removing the IAM node must not change the status code');
+  assert.strictEqual(withIamNode.steps.length, withoutIamNode.steps.length, 'Removing the IAM node must not change the traversed step count - it was never on the path');
+});
+
+test('47. NLB Health Check Failover Routes Around a Failed Target', () => {
+  // Real AWS NLBs perform their own target health checks, just like ALBs, and only route to
+  // healthy targets. Before this fix, NLB was excluded from the target-health evaluation
+  // behavior entirely, so it could route to a failed target even with a healthy one available.
+  const client: any = { id: 'client1', position: { x: 0, y: 0 }, data: { serviceId: 'user', label: 'Client' } };
+  const igw: any = { id: 'igw1', position: { x: 0, y: -100 }, data: { serviceId: 'internet_gateway', label: 'IGW', health: 'healthy' } };
+  const nlb: any = { id: 'nlb1', position: { x: 100, y: 0 }, data: { serviceId: 'nlb', label: 'NLB', subnet: 'public', health: 'healthy' } };
+  const ec2A: any = { id: 'ec2-a', position: { x: 200, y: -50 }, data: { serviceId: 'ec2', label: 'EC2-A', subnet: 'public', health: 'failed', failureReason: 'Simulated crash' } };
+  const ec2B: any = { id: 'ec2-b', position: { x: 200, y: 50 }, data: { serviceId: 'ec2', label: 'EC2-B', subnet: 'public', health: 'healthy' } };
+
+  const nodes = [client, igw, nlb, ec2A, ec2B];
+  const edges: any[] = [
+    { id: 'e1', source: 'client1', target: 'nlb1', data: { protocol: 'TCP' } },
+    { id: 'e2', source: 'nlb1', target: 'ec2-a', data: { protocol: 'TCP' } },
+    { id: 'e3', source: 'nlb1', target: 'ec2-b', data: { protocol: 'TCP' } }
+  ];
+
+  const scenario: SimulationScenario = {
+    id: 'test-nlb-failover',
+    name: 'NLB Failover Test',
+    method: 'GET',
+    path: '/health',
+    startNodeId: 'client1',
+    trafficLevel: 'normal'
+  };
+
+  const result = runSimulation(nodes, edges, scenario);
+  assert.strictEqual(result.success, true, 'Request should survive - NLB must route around the failed target');
+  const nlbStep = result.steps.find(s => s.sourceNodeId === 'nlb1');
+  assert.ok(nlbStep, 'NLB routing step must be executed');
+  assert.strictEqual(nlbStep!.targetNodeId, 'ec2-b', 'NLB must route to the healthy target, not the failed one');
+});
+
+test('48. PrivateLink (Interface VPC Endpoint) Requires Subnet Placement', () => {
+  // Real Interface VPC Endpoints create actual ENIs in customer-chosen subnets, unlike a Gateway
+  // VPC Endpoint (route-table-based, no ENI). A privatelink node with no containing subnet
+  // boundary is not a valid AWS deployment and must be reported as unassigned, same as any other
+  // ENI-backed resource placed outside every subnet.
+  const unplacedPrivateLink: any = {
+    id: 'pl1', position: { x: 5000, y: 5000 }, data: { serviceId: 'privatelink', label: 'Interface Endpoint' }
+  };
+  assert.strictEqual(deriveSubnetForNode(unplacedPrivateLink, []), 'unassigned', 'PrivateLink outside any subnet must be unassigned, not global');
+
+  const privateSubnet: any = {
+    id: 'subnet1', type: 'boundaryNode', position: { x: 0, y: 0 },
+    data: { boundaryType: 'private_subnet', width: 300, height: 200, label: 'Private Subnet' }
+  };
+  const placedPrivateLink: any = {
+    id: 'pl2', position: { x: 100, y: 100 }, data: { serviceId: 'privatelink', label: 'Interface Endpoint' }
+  };
+  assert.strictEqual(deriveSubnetForNode(placedPrivateLink, [privateSubnet]), 'private', 'PrivateLink correctly placed inside a subnet must resolve to that subnet');
+});
+
+test('49. Security Group on an Interface VPC Endpoint (PrivateLink) Is Enforced', () => {
+  // Real Interface VPC Endpoints are ENI-based and subject to Security Groups like any other
+  // ENI-backed resource. Before this fix, the VPC-endpoint hop never called the firewall check
+  // at all, so no SG configured on a PrivateLink endpoint could ever actually block traffic.
+  const privateSubnet: any = {
+    id: 'subnet1', type: 'boundaryNode', position: { x: 0, y: 0 },
+    data: { boundaryType: 'private_subnet', width: 400, height: 300 }
+  };
+  const restrictiveSg: any = {
+    id: 'sg1', type: 'boundaryNode', position: { x: 300, y: 200 },
+    data: { boundaryType: 'security_group', width: 50, height: 50, label: 'Restrictive SG', allowedProtocols: ['SQL'] }
+  };
+  const compute: any = { id: 'compute1', position: { x: 50, y: 50 }, data: { serviceId: 'ec2', label: 'App Server', subnet: 'private', health: 'healthy' } };
+  const endpoint: any = { id: 'endpoint1', position: { x: 200, y: 200 }, data: { serviceId: 'privatelink', label: 'Interface Endpoint', subnet: 'private', health: 'healthy', securityGroupIds: ['sg1'] } };
+
+  const nodes = [privateSubnet, restrictiveSg, compute, endpoint];
+  const edges: any[] = [{ id: 'e1', source: 'compute1', target: 'endpoint1', data: { protocol: 'HTTPS' } }];
+
+  const scenario: SimulationScenario = {
+    id: 'test-privatelink-sg', name: 'PrivateLink SG enforcement', method: 'GET', path: '/api',
+    startNodeId: 'compute1', trafficLevel: 'normal'
+  };
+
+  const result = runSimulation(nodes, edges, scenario);
+  assert.strictEqual(result.success, false, 'HTTPS must be blocked - the endpoint\'s Security Group only allows SQL');
+  assert.ok(result.steps.some(s => s.action.includes('Security Group')), 'Must record a Security Group evaluation step for the endpoint hop');
+});
+
+

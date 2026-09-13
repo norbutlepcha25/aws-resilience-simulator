@@ -11,9 +11,11 @@ import {
 
 export const FailureControls: React.FC = () => {
   const {
-    failAvailabilityZone,
+    nodes,
+    effectiveNodes,
+    injectFailure,
     restoreAllNodes,
-    nodes
+    failureImpacts
   } = useArchitecture();
 
   const [showCascadingModal, setShowCascadingModal] = useState(false);
@@ -21,7 +23,19 @@ export const FailureControls: React.FC = () => {
 
   const azANodes = nodes.filter(n => n.data.az === 'AZ-A');
   const azBNodes = nodes.filter(n => n.data.az === 'AZ-B');
-  const failedNodes = nodes.filter(n => n.data.health === 'failed');
+  // Reflects the REAL propagated consequence of every active failure (Phase 9's failure engine),
+  // not just the directly-targeted nodes - a node can end up failed here purely as a cascade.
+  const failedNodes = effectiveNodes.filter(n => n.data.health === 'failed');
+
+  const injectAzFailure = (az: 'AZ-A' | 'AZ-B') => {
+    injectFailure({
+      targetResourceId: az,
+      failureType: 'az_failure',
+      severity: 'critical',
+      trigger: 'manual',
+      reason: `Zone Outage (${az} Hardware Failure)`
+    });
+  };
 
   return (
     <>
@@ -35,20 +49,20 @@ export const FailureControls: React.FC = () => {
 
           {/* Fail AZ-A */}
           <button
-            onClick={() => failAvailabilityZone('AZ-A')}
+            onClick={() => injectAzFailure('AZ-A')}
             disabled={azANodes.length === 0}
             className="px-2.5 py-1 rounded bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 font-medium disabled:opacity-40 transition-colors shadow-2xs"
-            title="Inject simulated failure across all AZ-A services"
+            title="Inject a structured AZ failure through the failure propagation engine"
           >
             Simulate AZ-A Outage ({azANodes.length})
           </button>
 
           {/* Fail AZ-B */}
           <button
-            onClick={() => failAvailabilityZone('AZ-B')}
+            onClick={() => injectAzFailure('AZ-B')}
             disabled={azBNodes.length === 0}
             className="px-2.5 py-1 rounded bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 font-medium disabled:opacity-40 transition-colors shadow-2xs"
-            title="Inject simulated failure across all AZ-B services"
+            title="Inject a structured AZ failure through the failure propagation engine"
           >
             Simulate AZ-B Outage ({azBNodes.length})
           </button>
@@ -62,6 +76,15 @@ export const FailureControls: React.FC = () => {
             <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
             <span>Restore All ({failedNodes.length} offline)</span>
           </button>
+
+          {/* Failure Impact Summary - the real propagation result from engine/failure/, not a
+              guess: which dependents cascaded, which survived via redundancy. */}
+          {failureImpacts.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800 font-medium max-w-xl truncate" title={failureImpacts.map(i => i.summary).join(' ')}>
+              <span className="font-bold">Impact:</span>
+              <span className="truncate">{failureImpacts[failureImpacts.length - 1].summary}</span>
+            </div>
+          )}
         </div>
 
         {/* Right: Cascading Outage */}
@@ -74,14 +97,16 @@ export const FailureControls: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-200 shadow-xs transition-colors"
           >
             <Activity className="w-3.5 h-3.5 text-slate-500" />
-            <span>Step Through Cascading Outage</span>
+            <span>Case Study: Cascading Outage</span>
           </button>
         </div>
       </div>
 
-      {/* Cascading Failure Walkthrough Modal */}
+      {/* Cascading Failure Walkthrough Modal - a fixed illustrative case study, independent of
+          the user's own canvas. It does not read `nodes`/`edges` and is not a simulation of the
+          architecture currently on screen; see docs/audit/FAILURE_GAPS.md finding 1. */}
       {showCascadingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white border border-slate-200 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
             {/* Header */}
             <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white">
@@ -91,10 +116,10 @@ export const FailureControls: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    Cascading Failure Walkthrough
+                    Case Study: Cascading Outage
                   </h3>
                   <p className="text-xs text-slate-500">
-                    How an innocent slow query triggers a catastrophic multi-tier cloud outage
+                    A general, fixed case study (not based on your own architecture) showing how an innocent slow query can trigger a catastrophic multi-tier cloud outage
                   </p>
                 </div>
               </div>

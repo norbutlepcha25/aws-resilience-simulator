@@ -11,10 +11,10 @@ import { AnalysisModal } from './components/analysis/AnalysisModal.tsx';
 import { ChallengeModal } from './components/challenges/ChallengeModal.tsx';
 import { ExportModal } from './components/export/ExportModal.tsx';
 import { CostEstimatorModal } from './components/cost/CostEstimatorModal.tsx';
-import { TeachingToolbar } from './components/presentation/TeachingToolbar.tsx';
+import { NaclSideColumn } from './components/inspector/NaclSideColumn.tsx';
 
 const AppContent: React.FC = () => {
-  const { appMode } = useArchitecture();
+  const { appMode, showNaclSideColumn, setShowNaclSideColumn } = useArchitecture();
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isChallengesOpen, setIsChallengesOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -40,9 +40,6 @@ const AppContent: React.FC = () => {
 
         {/* Center Diagram Canvas Area */}
         <main className="flex-1 relative flex flex-col h-full overflow-hidden bg-white">
-          {/* Classroom / Projector Mode Overlay */}
-          <TeachingToolbar />
-
           {/* Graph Canvas */}
           <ArchitectureCanvas />
 
@@ -53,8 +50,12 @@ const AppContent: React.FC = () => {
           <SimulationControls />
         </main>
 
-        {/* Right Service & Connection Inspector */}
-        <ServiceInspector />
+        {/* Right Side Column: Either NACL Rule Column or Service Inspector */}
+        {showNaclSideColumn ? (
+          <NaclSideColumn onClose={() => setShowNaclSideColumn(false)} />
+        ) : (
+          <ServiceInspector />
+        )}
       </div>
 
       {/* Modals */}

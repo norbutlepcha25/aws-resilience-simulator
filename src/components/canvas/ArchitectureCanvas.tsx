@@ -17,7 +17,7 @@ import { NodeContextMenu } from './NodeContextMenu.tsx';
 import { NodeStatusModal } from './NodeStatusModal.tsx';
 import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
 import { ServiceNodeData, NodeHealth } from '../../types/index.ts';
-import { Route } from 'lucide-react';
+import { Route, Shield } from 'lucide-react';
 
 const nodeTypes = {
   serviceNode: ServiceNode,
@@ -49,7 +49,10 @@ export const ArchitectureCanvas: React.FC = () => {
     sendBackward,
     highlightTaskFlow,
     toggleTaskFlow,
-    simulationResult
+    simulationResult,
+    showNaclSideColumn,
+    setShowNaclSideColumn,
+    hasCustomNacl
   } = useArchitecture();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -246,16 +249,44 @@ export const ArchitectureCanvas: React.FC = () => {
             onClick={toggleTaskFlow}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium shadow-xs transition-all cursor-pointer backdrop-blur-sm ${
               highlightTaskFlow
-                ? 'bg-white/95 border-blue-400 text-blue-700 ring-2 ring-blue-500/10'
+                ? 'bg-white/95 border-circuit-400 text-circuit-700 ring-2 ring-circuit-500/10'
                 : 'bg-white/80 border-slate-200 text-slate-600 hover:bg-white'
             }`}
             title={highlightTaskFlow ? 'Task flow line highlights enabled (click to disable)' : 'Click to highlight task flow lines'}
           >
-            <Route className="w-3.5 h-3.5 text-blue-600" />
+            <Route className="w-3.5 h-3.5 text-circuit-600" />
             <span>Task Flow</span>
-            <span className={`w-1.5 h-1.5 rounded-full ${highlightTaskFlow ? 'bg-blue-600 animate-pulse' : 'bg-slate-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${highlightTaskFlow ? 'bg-circuit-600 animate-pulse' : 'bg-slate-300'}`} />
           </button>
+
+          {/* Quick NACL Rules & Signals Side Column Toggle */}
+          {hasCustomNacl && (
+            <button
+              onClick={() => setShowNaclSideColumn(!showNaclSideColumn)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold shadow-xs transition-all cursor-pointer backdrop-blur-sm ${
+                showNaclSideColumn
+                  ? 'bg-circuit-600 text-white border-circuit-600 ring-2 ring-circuit-400/30'
+                  : 'bg-white/95 border-slate-200 text-slate-700 hover:bg-white hover:border-circuit-300'
+              }`}
+              title="Open NACL Details & Signal Monitor in Side Column"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>NACL Details</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${showNaclSideColumn ? 'bg-white' : 'bg-circuit-500 animate-pulse'}`} />
+            </button>
+          )}
         </Panel>
+
+        {/* Architectural Title Banner (from Problem 3.1) */}
+        {hasCustomNacl && (
+          <Panel position="top-center" className="m-3">
+            <div className="px-4 py-1.5 rounded-xl bg-white/95 border border-slate-300 shadow-sm backdrop-blur-sm pointer-events-none text-center">
+              <span className="text-xs font-bold text-slate-800 tracking-wide font-sans">
+                Architectural Diagram addressing problem 3.1: Cause of connection timeout due to custom NACLs
+              </span>
+            </div>
+          </Panel>
+        )}
 
       </ReactFlow>
 

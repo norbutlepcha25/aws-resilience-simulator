@@ -6,7 +6,17 @@ overwrite stale sections instead of appending; `git log` is the changelog.
 Full objective/intent/architecture rules live in the root `CLAUDE.md` — this
 file only tracks what's currently true and in flight.
 
-Last updated: 2026-09-28 (Codex). Added derived dashed orange ASG membership frames on
+Last updated: 2026-09-28 (Claude). Lab 3 (EC2 and VPC) diagram cleanup, layout only, in both
+03-lab3-two-tier.json and 03-lab3-blocked.json. SG frames usms-app-sg/usms-db-sg moved from outside
+the VPC to wrap usms-web-01/usms-db-01 (membership is still explicit via securityGroupIds; frames
+are visual). IGW moved top-left, NAT below the subnet header, EBS volume beside the VPC edge, SQL
+edge uses source-bottom/target-top handles. BoundaryNode SG label gets whitespace-nowrap (applies
+to all SG frames). Suggested Browser→IGW→NAT and db→S3-endpoint edges were deliberately NOT added:
+simulation dead-ends at NAT/endpoint and both Lab 3 outcomes break (no S3 bucket node exists).
+S3 gateway endpoint → EBS is correctly refused (no protocol). Verified 480 tests (448 + 32 UI);
+visual check done in browser by the user. Open nit: SQL edge passes over the usms-db-sg label.
+
+Previously (Codex): Added derived dashed orange ASG membership frames on
 canvas. engine/layout/asgMembershipFrames.ts computes bounds of explicit initial and generated
 EC2 members, resolves nested positions, and partitions frames by subnet. Frames resize after
 launch/removal/movement, exclude hidden members, and have an ASG membership Layers toggle.

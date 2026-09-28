@@ -190,7 +190,7 @@ export const BoundaryNode = memo((props: any) => {
       return (
         <div className={`w-full h-full border-2 border-[#EF4444] bg-transparent relative select-none pointer-events-none ${selectedRing}`}>
           <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2.5 pointer-events-auto cursor-move border border-[#EF4444]/40 rounded-xs shadow-2xs">
-            <span className="text-xs font-semibold text-[#EF4444] font-sans">
+            <span className="text-xs font-semibold text-[#EF4444] font-sans whitespace-nowrap">
               {label || 'Security group'}
             </span>
           </div>

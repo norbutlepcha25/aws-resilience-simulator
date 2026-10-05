@@ -295,7 +295,7 @@
       "type": "serviceNode",
       "position": {
         "x": 635,
-        "y": 1010
+        "y": 960
       },
       "data": {
         "serviceId": "s3_gateway_endpoint",
@@ -356,8 +356,8 @@
       "id": "lab-igw",
       "type": "serviceNode",
       "position": {
-        "x": 650,
-        "y": -21
+        "x": 250,
+        "y": 60
       },
       "data": {
         "serviceId": "internet_gateway",
@@ -655,7 +655,7 @@
       "type": "serviceNode",
       "position": {
         "x": 430,
-        "y": 345
+        "y": 335
       },
       "data": {
         "serviceId": "ec2",

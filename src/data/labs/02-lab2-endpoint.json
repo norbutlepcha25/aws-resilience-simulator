@@ -20,7 +20,14 @@
         "boundaryType": "vpc",
         "width": 1040,
         "height": 1100,
-        "cidr": "10.0.0.0/16"
+        "cidr": "10.0.0.0/16",
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -4,
+      "measured": {
+        "width": 1040,
+        "height": 1100
       }
     },
     {
@@ -39,8 +46,53 @@
         "boundaryType": "public_subnet",
         "width": 440,
         "height": 260,
-        "cidr": "10.0.1.0/24",
-        "az": "AZ-A"
+        "cidr": "10.0.0.0/18",
+        "az": "AZ-A",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.0.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.0.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.0.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.0.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.63.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.0.4",
+          "end": "10.0.63.254"
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -3,
+      "measured": {
+        "width": 440,
+        "height": 260
       }
     },
     {
@@ -59,8 +111,53 @@
         "boundaryType": "public_subnet",
         "width": 440,
         "height": 260,
-        "cidr": "10.0.2.0/24",
-        "az": "AZ-B"
+        "cidr": "10.0.64.0/18",
+        "az": "AZ-B",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.64.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.64.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.64.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.64.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.127.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.64.4",
+          "end": "10.0.127.254"
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -3,
+      "measured": {
+        "width": 440,
+        "height": 260
       }
     },
     {
@@ -68,7 +165,7 @@
       "type": "boundaryNode",
       "position": {
         "x": 210,
-        "y": 560
+        "y": 660
       },
       "style": {
         "width": 440,
@@ -79,8 +176,53 @@
         "boundaryType": "private_subnet",
         "width": 440,
         "height": 320,
-        "cidr": "10.0.3.0/24",
-        "az": "AZ-A"
+        "cidr": "10.0.128.0/18",
+        "az": "AZ-A",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.128.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.128.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.128.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.128.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.191.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.128.4",
+          "end": "10.0.191.254"
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -3,
+      "measured": {
+        "width": 440,
+        "height": 320
       }
     },
     {
@@ -88,7 +230,7 @@
       "type": "boundaryNode",
       "position": {
         "x": 700,
-        "y": 560
+        "y": 660
       },
       "style": {
         "width": 440,
@@ -99,16 +241,61 @@
         "boundaryType": "private_subnet",
         "width": 440,
         "height": 320,
-        "cidr": "10.0.4.0/24",
-        "az": "AZ-B"
+        "cidr": "10.0.192.0/18",
+        "az": "AZ-B",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.192.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.192.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.192.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.192.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.255.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.192.4",
+          "end": "10.0.255.254"
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -3,
+      "measured": {
+        "width": 440,
+        "height": 320
       }
     },
     {
       "id": "lab-endpoint",
       "type": "serviceNode",
       "position": {
-        "x": 900,
-        "y": 940
+        "x": 635,
+        "y": 1010
       },
       "data": {
         "serviceId": "s3_gateway_endpoint",
@@ -118,15 +305,28 @@
         "az": "Edge / Global",
         "subnet": "global",
         "replicas": 1,
-        "multiAz": false
+        "multiAz": false,
+        "isSimulating": false,
+        "simulationStatus": "success",
+        "width": 130,
+        "height": 82
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 130,
+        "height": 82
+      },
+      "style": {
+        "width": 130,
+        "height": 82
       }
     },
     {
       "id": "lab-client",
       "type": "serviceNode",
       "position": {
-        "x": 10,
-        "y": 300
+        "x": 640,
+        "y": -170
       },
       "data": {
         "serviceId": "user",
@@ -136,15 +336,28 @@
         "az": "Edge / Global",
         "subnet": "global",
         "replicas": 1,
-        "multiAz": false
+        "multiAz": false,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 119,
+        "height": 82
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 119,
+        "height": 82
+      },
+      "style": {
+        "width": 119,
+        "height": 82
       }
     },
     {
       "id": "lab-igw",
       "type": "serviceNode",
       "position": {
-        "x": 450,
-        "y": 60
+        "x": 650,
+        "y": -21
       },
       "data": {
         "serviceId": "internet_gateway",
@@ -154,15 +367,28 @@
         "az": "Edge / Global",
         "subnet": "global",
         "replicas": 1,
-        "multiAz": false
+        "multiAz": false,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 100,
+        "height": 82
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 100,
+        "height": 82
+      },
+      "style": {
+        "width": 100,
+        "height": 82
       }
     },
     {
       "id": "lab-nat",
       "type": "serviceNode",
       "position": {
-        "x": 450,
-        "y": 300
+        "x": 235,
+        "y": 320
       },
       "data": {
         "serviceId": "nat_gateway",
@@ -172,15 +398,28 @@
         "az": "AZ-A",
         "subnet": "public",
         "replicas": 1,
-        "multiAz": false
+        "multiAz": false,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 100,
+        "height": 82
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 100,
+        "height": 82
+      },
+      "style": {
+        "width": 100,
+        "height": 82
       }
     },
     {
       "id": "lab-public-rt",
       "type": "serviceNode",
       "position": {
-        "x": 250,
-        "y": 940
+        "x": 630,
+        "y": 100
       },
       "data": {
         "serviceId": "route_tables",
@@ -191,15 +430,28 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": false,
-        "notes": "Reference association: public subnets; default route to usms-igw. Live route-table selection is approximated."
+        "notes": "Reference association: public subnets; default route to usms-igw. Live route-table selection is approximated.",
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 140,
+        "height": 116
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 116
+      },
+      "style": {
+        "width": 140,
+        "height": 116
       }
     },
     {
       "id": "lab-private-rt",
       "type": "serviceNode",
       "position": {
-        "x": 700,
-        "y": 940
+        "x": 630,
+        "y": 520
       },
       "data": {
         "serviceId": "route_tables",
@@ -210,52 +462,72 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": false,
-        "notes": "Reference association: private subnets; default route to usms-nat; S3 endpoint route."
+        "notes": "Reference association: private subnets; default route to usms-nat; S3 endpoint route.",
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 140,
+        "height": 116
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 116
+      },
+      "style": {
+        "width": 140,
+        "height": 116
       }
     },
     {
       "id": "lab-app-sg",
       "type": "boundaryNode",
       "position": {
-        "x": 1270,
-        "y": 50
+        "x": 380,
+        "y": 310
       },
       "style": {
-        "width": 220,
-        "height": 120
+        "width": 240,
+        "height": 170
       },
       "data": {
         "label": "usms-app-sg",
         "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
+        "width": 240,
+        "height": 170,
         "allowedProtocols": [
           "HTTP",
           "HTTPS"
-        ]
+        ],
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 240,
+        "height": 170
       }
     },
     {
       "id": "lab-db-sg",
       "type": "boundaryNode",
       "position": {
-        "x": 1270,
-        "y": 210
+        "x": 400,
+        "y": 730
       },
       "style": {
-        "width": 220,
-        "height": 120
+        "width": 230,
+        "height": 200
       },
       "data": {
         "label": "usms-db-sg",
         "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
+        "width": 230,
+        "height": 200,
         "securityGroupRules": {
           "inbound": [
             {
               "protocol": "SQL",
-              "portRange": "ALL",
+              "portRange": "5432",
               "source": {
                 "type": "securityGroup",
                 "securityGroupId": "lab-app-sg"
@@ -263,15 +535,22 @@
             }
           ],
           "outbound": []
-        }
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 230,
+        "height": 200
       }
     },
     {
       "id": "lab-probe",
       "type": "serviceNode",
       "position": {
-        "x": 250,
-        "y": 640
+        "x": 235,
+        "y": 740
       },
       "data": {
         "serviceId": "ec2",
@@ -320,15 +599,29 @@
               ]
             }
           ]
-        }
-      }
+        },
+        "isSimulating": true,
+        "simulationStatus": "active",
+        "width": 140,
+        "height": 99
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 99
+      },
+      "style": {
+        "width": 140,
+        "height": 99
+      },
+      "selected": false
     },
     {
       "id": "lab-bucket",
       "type": "serviceNode",
       "position": {
-        "x": 1550,
-        "y": 640
+        "x": 1320,
+        "y": 1010
       },
       "data": {
         "serviceId": "s3",
@@ -341,7 +634,84 @@
         "multiAz": false,
         "customConfig": {
           "resourceArn": "arn:aws:s3:::usms-student-data/transcript.txt"
-        }
+        },
+        "isSimulating": true,
+        "simulationStatus": "active",
+        "width": 140,
+        "height": 99
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 99
+      },
+      "style": {
+        "width": 140,
+        "height": 99
+      }
+    },
+    {
+      "id": "lab-web",
+      "type": "serviceNode",
+      "position": {
+        "x": 430,
+        "y": 345
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "usms-web-server (Lab 03)",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "Placeholder: launched in Lab 03 into usms-public-subnet-a with usms-app-sg.",
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 140,
+        "height": 99
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 99
+      },
+      "style": {
+        "width": 140,
+        "height": 99
+      }
+    },
+    {
+      "id": "lab-db",
+      "type": "serviceNode",
+      "position": {
+        "x": 445,
+        "y": 775
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "usms-db-instance (Lab 03)",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "private",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "Placeholder: launched in Lab 03 into usms-private-subnet-a with usms-db-sg.",
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "width": 140,
+        "height": 99
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 99
+      },
+      "style": {
+        "width": 140,
+        "height": 99
       }
     }
   ],
@@ -355,7 +725,15 @@
         "protocol": "HTTPS",
         "interactionType": "synchronous",
         "isCriticalDependency": true,
-        "timeoutMs": 1500
+        "timeoutMs": 1500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "completed",
+        "flowStepNumber": 2,
+        "flowStepIndex": 1,
+        "flowAction": "AWS VPC Gateway Endpoint Route",
+        "flowLatency": 4,
+        "flowExplanation": "Private network probe (teaching aid) in a private subnet routed directly to usms-s3-endpoint over the AWS private backbone. Zero internet exposure, and no NAT Gateway data-processing charges."
       }
     },
     {
@@ -367,7 +745,60 @@
         "protocol": "Object access",
         "interactionType": "synchronous",
         "isCriticalDependency": true,
-        "timeoutMs": 1500
+        "timeoutMs": 1500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "completed",
+        "flowStepNumber": 4,
+        "flowStepIndex": 3,
+        "flowAction": "Forward Object access request",
+        "flowLatency": 20,
+        "flowExplanation": "usms-s3-endpoint forwarded Object access request to S3 probe resource (teaching aid)."
+      }
+    },
+    {
+      "id": "lab-client-lab-igw",
+      "source": "lab-client",
+      "target": "lab-igw",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed"
+      }
+    },
+    {
+      "id": "lab-nat-lab-igw",
+      "source": "lab-nat",
+      "target": "lab-igw",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed"
+      }
+    },
+    {
+      "id": "lab-web-lab-db",
+      "source": "lab-web",
+      "target": "lab-db",
+      "type": "custom",
+      "data": {
+        "protocol": "SQL",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed"
       }
     }
   ],

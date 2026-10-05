@@ -1,10 +1,11 @@
 import { asgReady } from '../../scaling/asg.ts';
+import { eksReadyEndpoints } from '../../service/models/eks.ts';
 import { ecsHasAvailableTasks } from '../../service/models/ecs.ts';
 import type { AdapterContext, AdapterSignal } from './types.ts';
 import { CONTINUE, TERMINATE, advanceTo } from './types.ts';
 
 const LOAD_BALANCER_SERVICE_IDS = ['alb', 'nlb', 'api_gateway'];
-const COMPUTE_TARGET_SERVICE_IDS = ['ecs', 'ec2', 'lambda', 'fargate'];
+const COMPUTE_TARGET_SERVICE_IDS = ['ecs', 'ec2', 'lambda', 'fargate', 'eks'];
 
 /**
  * ALB / NLB / API Gateway target-group health evaluation. NLB performs its own target health
@@ -28,7 +29,7 @@ export const loadBalancerAdapter = (ctx: AdapterContext): AdapterSignal => {
     selected: false
   }));
 
-  const healthyTargets = targetList.filter(t => t.data.health === 'healthy' && asgReady(t.data) && (t.data.serviceId !== 'ecs' || ecsHasAvailableTasks(t.data)));
+  const healthyTargets = targetList.filter(t => t.data.health === 'healthy' && asgReady(t.data) && (t.data.serviceId !== 'ecs' || ecsHasAvailableTasks(t.data)) && (t.data.serviceId !== 'eks' || eksReadyEndpoints(t.data) > 0));
 
   if (healthyTargets.length === 0) {
     trace.pushStep({

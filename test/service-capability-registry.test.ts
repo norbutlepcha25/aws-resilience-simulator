@@ -67,12 +67,12 @@ test('5. Priority services 1-13 (EC2, Lambda, ECS/Fargate, S3, RDS, DynamoDB, AL
   }
 });
 
-test('6. EKS: a real, honest gap - dedicated config model, but not yet wired into the live compute/load-balancer/data-tier adapters', () => {
+test('6. EKS: bounded Ready-endpoint coverage remains partial', () => {
   const eks = getServiceCapabilityProfile('eks')!;
   assert.strictEqual(eks.flags.CONFIGURATION, true);
   assert.strictEqual(eks.flags.VALIDATION, true);
-  assert.strictEqual(eks.flags.CONNECTIVITY, false, 'EKS is not yet in any live adapter\'s serviceId list - this is a real gap, not an oversight in the registry');
-  assert.strictEqual(eks.flags.REQUEST_SIMULATION, false);
+  assert.strictEqual(eks.flags.CONNECTIVITY, true);
+  assert.strictEqual(eks.flags.REQUEST_SIMULATION, true);
   assert.strictEqual(eks.flags.FAILURE_SIMULATION, false);
   assert.notStrictEqual(eks.classification, 'FULL_BEHAVIOR', 'EKS must never be marked FULL_BEHAVIOR merely because it exists in the catalog with a dedicated model');
 });

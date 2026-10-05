@@ -964,3 +964,31 @@ test('Lab 1 user IAM links illustrate authorization without replacing the S3 req
     assert.equal(h.api().simulationResult!.success, false, 'An authorization illustration must never grant access');
   } finally { window.alert = oldAlert; await h.unmount(); }
 });
+
+test('EKS explorer opens explicitly, nests pod containers, persists readiness and preserves other configuration', async () => {
+  const h = await mount(true);
+  try {
+    await h.act(() => h.api().addServiceNode('eks', { x: 0, y: 0 }));
+    const eks = h.api().nodes.filter(n => n.data.serviceId === 'eks').at(-1)!;
+    await h.act(() => h.api().updateNodeData(eks.id, { subnet: 'private', customConfig: { sentinel: 'keep', eks: { kind: 'workload', clusterName: 'learning', namespace: 'web', runningPods: 2, readyPods: 1 } } }));
+    await h.act(() => h.api().setSelectedNodeId(eks.id));
+    assert.equal(document.querySelector('[aria-label="EKS component details"]'), null);
+    const button = (text: string) => [...document.querySelectorAll('button')].find(b => b.textContent?.includes(text))!;
+    const opener = button('More information'); opener.focus();
+    await h.act(() => opener.click());
+    const cluster = document.querySelector('[aria-label="EKS cluster boundary"]')!;
+    const namespace = cluster.querySelector('[aria-label="EKS namespace boundary: web"]')!;
+    assert.ok(namespace.querySelector('[aria-label="EKS pod snapshot 1"] button'));
+    assert.match(namespace.querySelector('[aria-label="EKS pod snapshot 1"]')!.textContent!, /Container/);
+    await h.act(() => button('Deployment:').click());
+    await h.act(() => button('Make all pods Not Ready').click());
+    assert.equal(h.api().nodes.find(n => n.id === eks.id)!.data.customConfig!.eks.readyPods, 0);
+    assert.equal(h.api().nodes.find(n => n.id === eks.id)!.data.customConfig!.sentinel, 'keep');
+    assert.match(namespace.textContent!, /0 eligible endpoints/);
+    await h.act(() => button('HPA ·').click());
+    assert.equal((button('Apply estimate') as HTMLButtonElement).disabled, true);
+    await h.act(() => document.querySelector('[role="dialog"]')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, opener);
+  } finally { await h.unmount(); }
+});

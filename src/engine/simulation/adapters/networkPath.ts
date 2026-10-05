@@ -2,6 +2,7 @@ import type { AdapterContext, AdapterSignal } from './types.ts';
 import { TERMINATE, advanceTo } from './types.ts';
 import { evaluateEndpoint } from '../../network/vpcEndpoint.ts';
 import { resolveNatEgress } from '../../network/nat.ts';
+import { eksConfiguration } from '../../service/models/eks.ts';
 
 const VPC_HOSTED_INGRESS_SERVICE_IDS = ['alb', 'nlb', 'api_gateway', 'app_runner', 'ec2', 'ecs', 'fargate'];
 const INGRESS_PROXY_SERVICE_IDS = ['alb', 'nlb', 'api_gateway', 'cloudfront'];
@@ -44,6 +45,18 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
 
   const edge = outgoingEdges.find(e => e.target === nextNode.id);
   const protocol = edge?.data?.protocol || 'HTTP';
+
+  // A Kubernetes ClusterIP does not become internet-facing by drawing a connection.
+  if (['user', 'client_ui', 'api_client'].includes(node.data.serviceId) && nextNode.data.serviceId === 'eks'
+      && eksConfiguration(nextNode.data).serviceType === 'ClusterIP') {
+    const reason = 'Kubernetes ClusterIP is an internal Service endpoint. Use a separately configured ingress or load balancer for external application traffic.';
+    trace.pushStep({ sourceNodeId: node.id, targetNodeId: nextNode.id, sourceNodeName: node.data.label,
+      targetNodeName: nextNode.data.label, protocol, action: 'ClusterIP external access denied',
+      status: 'failed', explanation: reason, targetHealth: nextNode.data.health, latencyMs: 0,
+      details: { statusCode: 503 } });
+    trace.fail(503, reason); return TERMINATE;
+  }
+
 
   // Explicit VPC origins require their configured origin and an attached IGW. The IGW
   // is a prerequisite, not a transit hop for CloudFront's private origin connection.

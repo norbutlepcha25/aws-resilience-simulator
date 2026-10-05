@@ -14,6 +14,8 @@ import {
   ChevronDown,
   DollarSign
 } from 'lucide-react';
+import type { Theme } from '../../utils/theme.ts';
+import { ThemeToggle } from './ThemeToggle.tsx';
 
 interface AppHeaderProps {
   onHome?: () => void;
@@ -21,6 +23,8 @@ interface AppHeaderProps {
   onOpenLabs: () => void;
   onOpenExport: () => void;
   onOpenCost: () => void;
+  theme?: Theme;
+  onToggleTheme?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -28,7 +32,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onOpenAnalysis,
   onOpenLabs,
   onOpenExport,
-  onOpenCost
+  onOpenCost,
+  theme,
+  onToggleTheme
 }) => {
   const {
     appMode,
@@ -68,9 +74,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   };
 
   return (
-    <header className="bg-[#12181F] border-b border-black/40 px-3 py-2 flex flex-wrap gap-2 items-center justify-between select-none z-30">
-      {/* Brand & Title */}
-      <div className="flex items-center gap-3">
+    <header className="bg-[#12181F] border-b border-black/40 px-3 py-2 flex flex-wrap gap-x-1.5 gap-y-2 items-center justify-between select-none z-30">
+      {/* Brand & Title - links back to the home page */}
+      <a
+        href="#home"
+        onClick={event => { if (onHome) { event.preventDefault(); onHome(); } }}
+        className="flex items-center gap-3 rounded-md hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 focus-visible:outline-offset-2"
+        title="Go to the home page"
+      >
         <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
           <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
             <path d="M12 28C6 28 2 23 2 17C2 11.5 6.5 7 12 7C13.5 7 15 7.5 16 8.5C18.5 4.5 22.5 2 27 2C35 2 41 8 41 16C44.5 17 47 20 47 24C47 29.5 42.5 34 37 34H12C7 34 2 29.5 2 24" stroke="#FF9900" strokeWidth="4" strokeLinecap="round" />
@@ -84,7 +95,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             Design, simulate, and break AWS cloud architectures
           </div>
         </div>
-      </div>
+      </a>
 
 
       {/* Mode Switcher / Primary Tabs */}
@@ -148,8 +159,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       </nav>
 
       {/* Right Actions: Templates Dropdown, Clear, Export */}
-      {onHome && <button onClick={onHome} className="px-3 py-2 rounded text-xs text-white/80 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">Home</button>}
-      <div className="flex items-center gap-2">
+      {onHome && <button onClick={onHome} className="px-2.5 py-2 rounded text-xs text-white/80 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">Home</button>}
+      <div className="flex items-center gap-1.5">
+        {theme && onToggleTheme && <ThemeToggle
+          theme={theme}
+          onToggle={onToggleTheme}
+          iconSize={14}
+          className="flex items-center px-1.5 py-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 text-xs font-medium transition-colors"
+        />}
         {/* Estimated AWS Bill - live figure, kept visually distinct from the action buttons */}
         <button
           onClick={onOpenCost}
@@ -160,7 +177,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <span className="font-mono font-semibold tabular-nums">${costReport.monthlyTotal.toFixed(2)}/mo</span>
         </button>
 
-        <div className="w-px h-5 bg-white/10 mx-0.5" />
+        <div className="w-px h-5 bg-white/10" />
 
         <button
           onClick={handleNewCanvas}
@@ -184,7 +201,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         {/* Export - the one primary action in the bar, given real visual weight */}
         <button
           onClick={onOpenExport}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-white text-[#12181F] hover:bg-white/90 text-xs font-semibold transition-colors ml-1"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-white text-[#12181F] hover:bg-white/90 dark:bg-white dark:hover:bg-white/90 text-xs font-semibold transition-colors ml-1"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Export</span>

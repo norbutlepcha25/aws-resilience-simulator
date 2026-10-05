@@ -23,7 +23,6 @@ import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
 import { ServiceNodeData, NodeHealth } from '../../types/index.ts';
 import { Route, Shield } from 'lucide-react';
 import { useTheme } from '../../utils/theme.ts';
-import { ThemeToggle } from '../layout/ThemeToggle.tsx';
 
 const nodeTypes = {
   asgMembershipFrame: ({ data }: any) => <div className="w-full h-full border-2 border-dashed border-orange-500 rounded-xl pointer-events-none bg-transparent"><span className="absolute left-3 top-1 px-1 bg-white text-xs font-semibold text-orange-700 dark:bg-[#0f1720] dark:text-orange-300">{data.label} · membership</span></div>,
@@ -66,7 +65,7 @@ export const ArchitectureCanvas: React.FC = () => {
   } = useArchitecture();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [theme, toggleTheme] = useTheme();
+  const [theme] = useTheme();
   const dark = theme === 'dark';
   const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
   // Project visibility into React Flow without modifying the architecture used by the engine.
@@ -207,9 +206,8 @@ export const ArchitectureCanvas: React.FC = () => {
     setContextMenu(null);
   }, [setSelectedNodeId, setSelectedEdgeId]);
 
-  // `dark` scopes Tailwind dark: variants to the canvas; the rest of the lab stays light.
   return (
-    <div className={`lab-canvas relative w-full h-full flex-1 overflow-hidden select-none ${dark ? 'dark bg-[#0f1720]' : 'bg-white'}`} ref={reactFlowWrapper}>
+    <div className={`lab-canvas relative w-full h-full flex-1 overflow-hidden select-none ${dark ? 'bg-[#0f1720]' : 'bg-white'}`} ref={reactFlowWrapper}>
       <ReactFlow
         key={canvasRevision}
         nodes={[...visibleNodes, ...displayedFrames]}
@@ -296,14 +294,7 @@ export const ArchitectureCanvas: React.FC = () => {
           )}
         </Panel>
 
-        <Panel position="top-right" className="m-3 flex items-center gap-2">
-          <ThemeToggle
-            theme={theme}
-            onToggle={toggleTheme}
-            iconSize={14}
-            showLabel
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-          />
+        <Panel position="top-right" className="m-3">
           <CanvasLayers nodes={[...nodes, ...membershipFrames]} hidden={hiddenLayers} onChange={setHiddenLayers} />
         </Panel>
 

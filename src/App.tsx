@@ -14,6 +14,7 @@ import { LabsModal } from './components/labs/LabsModal.tsx';
 import { ExportModal } from './components/export/ExportModal.tsx';
 import { CostEstimatorModal } from './components/cost/CostEstimatorModal.tsx';
 import { NaclSideColumn } from './components/inspector/NaclSideColumn.tsx';
+import { useTheme } from './utils/theme.ts';
 
 const AppContent: React.FC<{ onHome: () => void }> = ({ onHome }) => {
   const { appMode, showNaclSideColumn, setShowNaclSideColumn } = useArchitecture();
@@ -21,12 +22,25 @@ const AppContent: React.FC<{ onHome: () => void }> = ({ onHome }) => {
   const [isLabsOpen, setIsLabsOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isCostOpen, setIsCostOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
+
+  // Dark mode lives on <html> so portalled dialogs are themed too: `dark` drives Tailwind dark:
+  // variants, `lab-dark` the generated overrides in styles/lab-dark.generated.css. Removed when
+  // leaving the lab; the home page themes itself.
+  React.useEffect(() => {
+    const html = document.documentElement;
+    html.classList.toggle('dark', theme === 'dark');
+    html.classList.toggle('lab-dark', theme === 'dark');
+    return () => { html.classList.remove('dark', 'lab-dark'); };
+  }, [theme]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-slate-900 font-sans select-none">
       {/* Top Application Header */}
       <AppHeader
         onHome={onHome}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onOpenAnalysis={() => setIsAnalysisOpen(true)}
         onOpenLabs={() => setIsLabsOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}

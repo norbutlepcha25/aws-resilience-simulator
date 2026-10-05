@@ -6,18 +6,24 @@ overwrite stale sections instead of appending; `git log` is the changelog.
 Full objective/intent/architecture rules live in the root `CLAUDE.md` — this
 file only tracks what's currently true and in flight.
 
-Last updated: 2026-10-05 (Claude). UNCOMMITTED (latest): light/dark mode + home scroll animation.
+Last updated: 2026-10-05 (Claude). UNCOMMITTED (latest): light/dark mode (home + whole lab) + home scroll animation.
 utils/theme.ts useTheme() shares one preference (localStorage `cloud-architecture-lab:theme`, default =
-OS prefers-color-scheme) between home and canvas; layout/ThemeToggle.tsx is the button (home nav, and
-canvas top-right beside Layers). Home: `.lab-home[data-theme=dark]` overrides in home.css (exported-PNG
-illustration intentionally stays white). Canvas: ArchitectureCanvas adds `dark` to `.lab-canvas` wrapper,
-so Tailwind dark: variants apply ONLY inside the canvas (palette, inspector, modals, sim bar stay light —
-not themed yet); React Flow colorMode follows; default edge stroke uses var(--canvas-edge); #232F3E glyph
-strokes lightened via index.css. PNG export temporarily drops `dark` so exports stay white/light.
+OS prefers-color-scheme); layout/ThemeToggle.tsx is the button (home nav; lab header beside Home).
+Home: `.lab-home[data-theme=dark]` overrides in home.css (exported-PNG illustration stays white on purpose).
+Lab: App sets `dark` + `lab-dark` on <html> while the lab is open (so portalled explorers are themed).
+Whole lab UI (palette, inspector, timeline, sim bar, modals) is themed by src/styles/lab-dark.generated.css,
+produced by scripts/generate-lab-dark-theme.mjs (`npm run theme:sync`, also in predev/prebuild): it scans
+src (excluding home/) for light Tailwind colour utilities and remaps them under :where(html.lab-dark).
+Hand-written `dark:` variants (canvas nodes/boundaries/edges, header Export button) win over generated
+rules. New light colour classes are picked up on next dev/build; inline style colours are NOT remapped.
+Canvas: React Flow colorMode follows theme; default edge stroke var(--canvas-edge); #232F3E glyph strokes
+lightened in index.css. PNG export temporarily removes the html classes so exports stay light/white.
+Header spacing trimmed slightly so it still fits one row at 1440px with the toggle.
 Scroll animation: `.home-reveal` sections fade up via IntersectionObserver, `.home-stagger` children
 stagger; hidden only after `.home-reveal-ready` is set, skipped under prefers-reduced-motion; hero
 entrance keyframes; top scroll-progress bar. 456 engine + 34 UI tests pass, build passes; headless
-Chrome checked home light/dark and empty dark canvas (nodes on dark canvas not visually checked).
+Chrome (CDP) checked home light/dark and lab dark with a loaded reference, simulation, inspector and
+Analyze modal. Other modals/explorers (ECS/EKS, cost, labs, export) not visually checked in dark.
 Earlier same day, now committed (b2fc1af): home page (src/components/home/, App.tsx #home/#lab
 hash routing, AppHeader Home button). Restyled with sage/slate palette (#cad2c5 #84a98c #52796f
 #354f52 #2f3e46), Inter → Roboto → sans-serif (loaded in index.html; home only, app still IBM Plex),

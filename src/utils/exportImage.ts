@@ -27,8 +27,9 @@ export async function downloadCanvasAsPng(
   const viewport = getViewportForBounds(bounds, IMAGE_WIDTH, IMAGE_HEIGHT, MIN_ZOOM, MAX_ZOOM, PADDING);
 
   // Exports are always light (white background, dark labels), whatever the canvas theme.
-  const darkCanvas = viewportEl.closest('.lab-canvas.dark');
-  darkCanvas?.classList.remove('dark');
+  const html = document.documentElement;
+  const darkPage = html.classList.contains('lab-dark');
+  html.classList.remove('dark', 'lab-dark');
   const flow = viewportEl.closest('.react-flow.dark');
   flow?.classList.remove('dark');
   let dataUrl: string;
@@ -47,7 +48,7 @@ export async function downloadCanvasAsPng(
       }
     });
   } finally {
-    darkCanvas?.classList.add('dark');
+    if (darkPage) html.classList.add('dark', 'lab-dark');
     flow?.classList.add('dark');
   }
 

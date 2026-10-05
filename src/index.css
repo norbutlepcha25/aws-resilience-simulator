@@ -106,13 +106,17 @@
   .text-\[12px\] { font-size: 14px; }
 }
 
-/* Dark canvas (ArchitectureCanvas adds `dark` to .lab-canvas). */
-.lab-canvas.dark {
+/* Lab dark mode (App sets html.lab-dark; colour utilities are remapped in styles/lab-dark.generated.css). */
+html.lab-dark {
   --canvas-edge: #94A3B8;
   color-scheme: dark;
 }
-.lab-canvas.dark .react-flow {
+html.lab-dark body { background-color: #0f172a; color: #e2e8f0; }
+html.lab-dark .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+html.lab-dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+html.lab-dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+html.lab-dark .react-flow {
   --xy-background-color: #0f1720;
 }
 /* Client/actor glyphs are drawn as dark outlines; lighten them so they stay visible. */
-.lab-canvas.dark .react-flow__node [stroke="#232F3E"] { stroke: #E2E8F0; }
+html.lab-dark [stroke="#232F3E"] { stroke: #E2E8F0; }

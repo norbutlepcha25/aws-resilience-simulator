@@ -29,7 +29,6 @@ import {
   BookOpen,
   Flag,
   Cloud,
-  Lock,
   Shield,
   Server,
   Copy,
@@ -49,6 +48,7 @@ import {
   Database,
   Info
 } from 'lucide-react';
+import { VpcGroupIcon, PublicSubnetGroupIcon, PrivateSubnetGroupIcon } from '../icons/AwsGroupIcons.tsx';
 import {
   calculateNodeCost,
   EC2_INSTANCE_TYPES,
@@ -353,10 +353,10 @@ export const ServiceInspector: React.FC = () => {
       },
       vpc: {
         title: 'Virtual Private Cloud (VPC)',
-        color: '#16A34A',
-        bgColor: '#EEF7E8',
-        badgeBg: '#16A34A',
-        icon: <Cloud className="w-3.5 h-3.5 text-white" />,
+        color: '#8C4FFF',
+        bgColor: '#F4EEFF',
+        badgeBg: '#8C4FFF',
+        icon: <VpcGroupIcon size={32} className="rounded-lg" />,
         scope: 'Regional Virtual Network',
         defaultCidr: '10.0.0.0/16',
         teachingNotes: [
@@ -367,10 +367,10 @@ export const ServiceInspector: React.FC = () => {
       },
       public_subnet: {
         title: 'Public Subnet',
-        color: '#16A34A',
-        bgColor: '#EEF7E8',
-        badgeBg: '#16A34A',
-        icon: <Lock className="w-3.5 h-3.5 text-white" />,
+        color: '#7AA116',
+        bgColor: '#F2F8E8',
+        badgeBg: '#7AA116',
+        icon: <PublicSubnetGroupIcon size={32} className="rounded-lg" />,
         scope: 'Zonal (Bound to 1 AZ)',
         defaultCidr: '10.0.1.0/24',
         teachingNotes: [
@@ -381,10 +381,10 @@ export const ServiceInspector: React.FC = () => {
       },
       private_subnet: {
         title: 'Private Subnet',
-        color: '#0073BB',
-        bgColor: '#EEF6FC',
-        badgeBg: '#0073BB',
-        icon: <Lock className="w-3.5 h-3.5 text-white" />,
+        color: '#00A4A6',
+        bgColor: '#E6F6F6',
+        badgeBg: '#00A4A6',
+        icon: <PrivateSubnetGroupIcon size={32} className="rounded-lg" />,
         scope: 'Zonal (Bound to 1 AZ)',
         defaultCidr: '10.0.2.0/24',
         teachingNotes: [

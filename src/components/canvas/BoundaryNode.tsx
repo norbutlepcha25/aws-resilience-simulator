@@ -3,12 +3,12 @@ import { NodeResizer } from '@xyflow/react';
 import {
   Flag,
   Cloud,
-  Lock,
   Zap,
   Server,
   AlertTriangle,
   Shield
 } from 'lucide-react';
+import { VpcGroupIcon, PublicSubnetGroupIcon, PrivateSubnetGroupIcon } from '../icons/AwsGroupIcons.tsx';
 import type { SubnetNaclConfig } from '../../types/index.ts';
 
 export interface BoundaryNodeData {
@@ -71,14 +71,12 @@ export const BoundaryNode = memo((props: any) => {
       );
     }
 
-    // 2. VPC BOUNDARY (Green solid border with Top-Left Green Cloud badge)
+    // 2. VPC BOUNDARY (AWS VPC group: purple solid border with the official VPC group badge)
     if (boundaryType === 'vpc') {
       return (
-        <div className={`w-full h-full border-2 border-[#16A34A] bg-transparent relative select-none pointer-events-none ${selectedRing}`}>
-          <div className="absolute -top-3.5 left-3 flex items-center gap-1.5 bg-white px-2 pointer-events-auto cursor-move shadow-2xs rounded-xs border border-[#16A34A]/30">
-            <div className="w-5 h-5 bg-[#16A34A] text-white flex items-center justify-center rounded-xs shadow-xs">
-              <Cloud className="w-3 h-3 fill-white" />
-            </div>
+        <div className={`w-full h-full border-2 border-[#8C4FFF] bg-transparent relative select-none pointer-events-none ${selectedRing}`}>
+          <div className="absolute -top-3.5 left-3 flex items-center gap-1.5 bg-white px-2 pointer-events-auto cursor-move shadow-2xs rounded-xs border border-[#8C4FFF]/30">
+            <VpcGroupIcon size={20} className="rounded-xs shadow-xs" />
             <span className="text-xs font-bold text-[#545B64] font-sans tracking-tight">
               {label || 'VPC'}
             </span>
@@ -103,15 +101,13 @@ export const BoundaryNode = memo((props: any) => {
       );
     }
 
-    // 4. PUBLIC SUBNET BOUNDARY (Clean white background with Green Lock badge)
+    // 4. PUBLIC SUBNET BOUNDARY (AWS public subnet group: green border, official group badge)
     if (boundaryType === 'public_subnet') {
       return (
-        <div className={`w-full h-full border border-[#16A34A] bg-white relative select-none pointer-events-none shadow-xs ${selectedRing}`}>
-          <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-auto cursor-move bg-white px-2 py-0.5 rounded shadow-2xs border border-[#16A34A]/30">
-            <div className="w-5 h-5 bg-[#16A34A] text-white flex items-center justify-center rounded-xs shadow-xs">
-              <Lock className="w-3 h-3 text-white" />
-            </div>
-            <span className="text-xs font-bold text-[#166534] font-sans">
+        <div className={`w-full h-full border border-[#7AA116] bg-white relative select-none pointer-events-none shadow-xs ${selectedRing}`}>
+          <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-auto cursor-move bg-white px-2 py-0.5 rounded shadow-2xs border border-[#7AA116]/30">
+            <PublicSubnetGroupIcon size={20} className="rounded-xs shadow-xs" />
+            <span className="text-xs font-bold text-[#4B6610] font-sans">
               {label || 'Public subnet'}
             </span>
             {data.cidrError ? (
@@ -144,15 +140,13 @@ export const BoundaryNode = memo((props: any) => {
       );
     }
 
-    // 5. PRIVATE SUBNET BOUNDARY (Clean white background with Blue Lock badge)
+    // 5. PRIVATE SUBNET BOUNDARY (AWS private subnet group: teal border, official group badge)
     if (boundaryType === 'private_subnet') {
       return (
-        <div className={`w-full h-full border border-[#0073BB] bg-white relative select-none pointer-events-none shadow-xs ${selectedRing}`}>
-          <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-auto cursor-move bg-white px-2 py-0.5 rounded shadow-2xs border border-[#0073BB]/30">
-            <div className="w-5 h-5 bg-[#0073BB] text-white flex items-center justify-center rounded-xs shadow-xs">
-              <Lock className="w-3 h-3 text-white" />
-            </div>
-            <span className="text-xs font-bold text-[#0073BB] font-sans">
+        <div className={`w-full h-full border border-[#00A4A6] bg-white relative select-none pointer-events-none shadow-xs ${selectedRing}`}>
+          <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-auto cursor-move bg-white px-2 py-0.5 rounded shadow-2xs border border-[#00A4A6]/30">
+            <PrivateSubnetGroupIcon size={20} className="rounded-xs shadow-xs" />
+            <span className="text-xs font-bold text-[#00797B] font-sans">
               {label || 'Private subnet'}
             </span>
             {data.cidrError ? (

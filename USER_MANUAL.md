@@ -1,4 +1,4 @@
-# User Manual — AWS Architecture Lab
+# User Manual — Cloud Architecture Lab
 
 This is a guide for people *using* the simulator (students, instructors, self-learners) —
 how to build an architecture, run it, break it, and read the results. For developer/engineering

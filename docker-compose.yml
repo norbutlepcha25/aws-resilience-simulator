@@ -1,5 +1,5 @@
 services:
-  aws-resilience-simulator:
+  cloud-architecture-lab:
     build: .
     ports:
       - "8080:80"

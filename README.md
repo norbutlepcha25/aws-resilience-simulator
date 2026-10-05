@@ -1,6 +1,8 @@
-# AWS Architecture Lab
+# Cloud Architecture Lab
 
-An interactive, in-browser AWS architecture simulator for teaching cloud resilience, networking, and system design. Drag AWS services onto a canvas, wire them together, and run realistic request simulations that enforce actual AWS behavior — not just a static diagram tool.
+> Cloud Architecture Lab is an independent, open-source educational project. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services, Inc. or Amazon.com, Inc. Amazon Web Services, AWS, and related service names and icons are trademarks of Amazon.com, Inc. or its affiliates, used here for identification and educational purposes only. Simulated behavior is an approximation and is not official AWS documentation.
+
+An interactive, in-browser architecture simulator for learning AWS concepts: cloud resilience, networking, and system design. Drag AWS services onto a canvas, wire them together, and run request simulations that model documented AWS behavior — not just a static diagram tool.
 
 Built with React, TypeScript, [@xyflow/react](https://reactflow.dev/), and Tailwind CSS.
 
@@ -40,8 +42,8 @@ docker compose up --build   # then open http://localhost:8080
 or without Compose:
 
 ```bash
-docker build -t aws-resilience-simulator .
-docker run -p 8080:80 aws-resilience-simulator
+docker build -t cloud-architecture-lab .
+docker run -p 8080:80 cloud-architecture-lab
 ```
 
 ## Project structure
@@ -69,4 +71,8 @@ Contributions are welcome — this project is used as a teaching tool, so studen
 
 MIT — see [LICENSE](LICENSE).
 
-The AWS service icons under `src/components/serviceIcon/` are AWS's own [Architecture Icons](https://aws.amazon.com/architecture/icons/), used here under AWS's asset-package terms for building architecture diagrams. They are not covered by this project's MIT license and remain AWS's assets.
+### Trademarks
+
+Cloud Architecture Lab is an independent, open-source educational project. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services, Inc. or Amazon.com, Inc. Amazon Web Services, AWS, and related service names and icons are trademarks of Amazon.com, Inc. or its affiliates, used here for identification and educational purposes only. Simulated behavior is an approximation and is not official AWS documentation.
+
+The AWS service and resource icons under `src/components/serviceIcon/`, and the VPC/subnet group glyphs in `src/components/icons/AwsGroupIcons.tsx`, are AWS's own [Architecture Icons](https://aws.amazon.com/architecture/icons/), used here under AWS's asset-package terms for building architecture diagrams. They are not covered by this project's MIT license and remain AWS's assets.

@@ -3,7 +3,7 @@
 ## 1. Project identity
 
 **Project name:** AWS Architecture Lab\
-**Package name:** `aws-resilience-simulator`\
+**Package name:** `cloud-architecture-lab`\
 **Purpose:** An interactive, browser-based AWS architecture simulator
 for teaching cloud architecture, networking, security, resilience, and
 system design.

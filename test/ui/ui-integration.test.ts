@@ -992,3 +992,44 @@ test('EKS explorer opens explicitly, nests pod containers, persists readiness an
     assert.equal(document.activeElement, opener);
   } finally { await h.unmount(); }
 });
+
+test('Home page opens the lab and routes real issue/comment links without a fake submission form', async () => {
+  const { HomePage } = await import('../../src/components/home/HomePage.tsx');
+  const root = createRoot(document.getElementById('root')!);
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = (async () => ({ ok: true, json: async () => [
+    { login: 'CS-Sensei', type: 'User', avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', contributions: 10 },
+    { login: 'Copilot', type: 'Bot', avatar_url: 'https://avatars.githubusercontent.com/in/2?v=4', contributions: 1 },
+    { login: 'Namgay282004', type: 'User', avatar_url: 'https://avatars.githubusercontent.com/u/3?v=4', contributions: 1 },
+  ] })) as any;
+  let started = 0;
+  try {
+    await act(async () => root.render(React.createElement(HomePage, { onStart: () => { started++; } })));
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const start = [...document.querySelectorAll('button')].find(b => b.textContent?.includes('Start exploring'))!;
+    await act(async () => start.click());
+    assert.equal(started, 1);
+    for (const label of ['Report an issue', 'Leave a comment or idea']) {
+      const link = [...document.querySelectorAll('a')].find(a => a.textContent?.includes(label))!;
+      const url = new URL(link.href);
+      assert.equal(url.origin, 'https://github.com');
+      assert.equal(url.pathname, '/norbutlepcha25/cloud-architecture-lab/issues/new');
+      assert.ok(url.searchParams.get('body'));
+    }
+    assert.equal(document.querySelector('form'), null);
+    const guideRows = document.querySelectorAll('#guide tbody tr');
+    assert.ok(guideRows.length >= 15, 'interface guide lists every area');
+    assert.match(document.getElementById('save')!.textContent!, /Download JSON[\s\S]*Upload JSON[\s\S]*Save and resume a draft[\s\S]*Download the diagram as an image/);
+    const docLinks = [...document.querySelectorAll<HTMLAnchorElement>('#aws-docs a[href^="https://"]')].filter(a => !a.href.includes('github.com'));
+    assert.ok(docLinks.length >= 20);
+    for (const a of docLinks) assert.match(new URL(a.href).hostname, /^(docs\.)?aws\.amazon\.com$|^docs\.aws\.amazon\.com$/);
+    const natTab = [...document.querySelectorAll<HTMLButtonElement>('[role=tab]')].find(b => b.textContent === 'NAT gateway fails')!;
+    await act(async () => natTab.click());
+    assert.equal(natTab.getAttribute('aria-selected'), 'true');
+    assert.match(document.getElementById('home-scenario-panel')!.textContent!, /PARTIAL OUTAGE/);
+    assert.match(document.querySelector('.home-contributors')!.textContent!, /Namgay Wangchuk/);
+    assert.doesNotMatch(document.querySelector('.home-contributors ul')!.textContent!, /bot|claude|codex|agent|copilot/i);
+    const avatars = [...document.querySelectorAll<HTMLImageElement>('.home-contributors img')].map(img => img.src);
+    assert.deepEqual(avatars, ['https://avatars.githubusercontent.com/u/1?v=4&s=112', 'https://avatars.githubusercontent.com/u/3?v=4&s=112']);
+  } finally { globalThis.fetch = previousFetch; await act(async () => root.unmount()); }
+});

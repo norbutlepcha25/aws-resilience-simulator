@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 interface AppHeaderProps {
+  onHome?: () => void;
   onOpenAnalysis: () => void;
   onOpenLabs: () => void;
   onOpenExport: () => void;
@@ -23,6 +24,7 @@ interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
+  onHome,
   onOpenAnalysis,
   onOpenLabs,
   onOpenExport,
@@ -146,6 +148,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       </nav>
 
       {/* Right Actions: Templates Dropdown, Clear, Export */}
+      {onHome && <button onClick={onHome} className="px-3 py-2 rounded text-xs text-white/80 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">Home</button>}
       <div className="flex items-center gap-2">
         {/* Estimated AWS Bill - live figure, kept visually distinct from the action buttons */}
         <button

@@ -1,3 +1,4 @@
+import { HomePage } from './components/home/HomePage.tsx';
 import { AppFooter } from './components/layout/AppFooter.tsx';
 import React, { useState } from 'react';
 import { ArchitectureProvider, useArchitecture } from './context/ArchitectureContext.tsx';
@@ -14,7 +15,7 @@ import { ExportModal } from './components/export/ExportModal.tsx';
 import { CostEstimatorModal } from './components/cost/CostEstimatorModal.tsx';
 import { NaclSideColumn } from './components/inspector/NaclSideColumn.tsx';
 
-const AppContent: React.FC = () => {
+const AppContent: React.FC<{ onHome: () => void }> = ({ onHome }) => {
   const { appMode, showNaclSideColumn, setShowNaclSideColumn } = useArchitecture();
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isLabsOpen, setIsLabsOpen] = useState(false);
@@ -25,6 +26,7 @@ const AppContent: React.FC = () => {
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-slate-900 font-sans select-none">
       {/* Top Application Header */}
       <AppHeader
+        onHome={onHome}
         onOpenAnalysis={() => setIsAnalysisOpen(true)}
         onOpenLabs={() => setIsLabsOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
@@ -86,9 +88,17 @@ const AppContent: React.FC = () => {
 };
 
 export const App: React.FC = () => {
+  const [page, setPage] = useState(() => window.location.hash === '#lab' ? 'lab' : 'home');
+  React.useEffect(() => {
+    const sync = () => setPage(window.location.hash === '#lab' ? 'lab' : 'home');
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+  const navigate = (next: 'home' | 'lab') => { window.location.hash = next === 'lab' ? 'lab' : 'home'; setPage(next); };
   return (
     <ArchitectureProvider>
-      <AppContent />
+      {page === 'home' && <HomePage onStart={() => navigate('lab')} />}
+      {page === 'lab' && <AppContent onHome={() => navigate('home')} />}
     </ArchitectureProvider>
   );
 };

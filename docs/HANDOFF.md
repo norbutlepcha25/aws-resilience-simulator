@@ -6,7 +6,39 @@ overwrite stale sections instead of appending; `git log` is the changelog.
 Full objective/intent/architecture rules live in the root `CLAUDE.md` — this
 file only tracks what's currently true and in flight.
 
-Last updated: 2026-09-28 (Claude). Lab 3 (EC2 and VPC) diagram cleanup, layout only, in both
+Last updated: 2026-10-05 (Claude). UNCOMMITTED: home page (src/components/home/, App.tsx #home/#lab
+hash routing, AppHeader Home button). Restyled with sage/slate palette (#cad2c5 #84a98c #52796f
+#354f52 #2f3e46), Inter → Roboto → sans-serif (loaded in index.html; home only, app still IBM Plex),
+base font 18px. Contributors fetched live from GitHub API /contributors (type User, bot/AI names
+filtered) with avatars; falls back to curated logins + github.com/<login>.png when offline or
+rate-limited (60 req/h unauthenticated). Commit name "Drac" = GitHub KeldenPDorji. Suite: 455/456 pass;
+the one failure, course-labs "lab2-endpoint ... spills outside VPC", is in lab data this change did not touch.
+User-facing name changed to "Cloud Architecture Lab" (index.html title, home page, README,
+USER_MANUAL; app header already used it). AWS non-affiliation/trademark disclaimer added to home
+footer, README (top + Trademarks section) and app footer. Favicon is now a neutral layers icon
+(was AWS-orange cloud). CLAUDE.md/AGENTS.md project name left as-is (agent docs).
+GitHub repo renamed 2026-10-05 to norbutlepcha25/cloud-architecture-lab (old URL redirects; never
+recreate a repo named aws-resilience-simulator). package/docker names and all links updated.
+Check Amplify console still tracks the renamed repo.
+Home page rebuilt (floci.io-inspired): dark hero with sample trace, stats (lab count from COURSE_LABS),
+tabbed "See it work" explorer (3 static illustrative scenarios drawn with AwsServiceIcon + canvas frame colours: success, SG deny, NAT failure —
+NOT engine output; labelled as illustrative), steps, five modes, quick-start tabs (browser/npm/docker),
+13-lab list, use cases, community, contributors, multi-column footer with disclaimer. Headless Chrome
+screenshots checked at 1440/800/390px; animations use fill-mode backwards so content shows if they don't run. Section eyebrow labels removed per user.
+Live site: https://main.dcaowu8w5ohp0.amplifyapp.com/ (Amplify, deploys main).
+Icons aligned to the official AWS Architecture Icons package (07/31/2026): added resource icons
+amazon-vpc-{nat-gateway,internet-gateway,router,peering-connection,endpoints}.svg and remapped
+nat_gateway, internet_gateway, route_tables (was Route 53!), vpc_peering, s3_gateway_endpoint/s3_endpoint.
+VPC/public/private subnet frames now use official group colours (#8C4FFF / #7AA116 / #00A4A6) and
+glyphs via icons/AwsGroupIcons.tsx in BoundaryNode, ServicePalette, ServiceInspector and home page.
+Home page now also has: interface guide (numbered layout sketch + 18-row table mirroring USER_MANUAL.md
+— keep in step), "Save, share and export" (JSON download/upload, browser draft, PNG export with illustrative
+PNG mock), and "Learn it from the source" (24 official AWS doc links, all verified HTTP 200 on 2026-10-05;
+each scenario tab also cites its AWS docs). "Five modes" cards removed: only Design/Simulate/Failure Lab are
+modes; Analyze/Labs open panels. Region/AZ/SG frame styling unchanged. vpn_gateway still uses the Site-to-Site VPN service icon.
+No browser visual QA.
+
+Previously (Claude, 2026-09-28): Lab 3 (EC2 and VPC) diagram cleanup, layout only, in both
 03-lab3-two-tier.json and 03-lab3-blocked.json. SG frames usms-app-sg/usms-db-sg moved from outside
 the VPC to wrap usms-web-01/usms-db-01 (membership is still explicit via securityGroupIds; frames
 are visual). IGW moved top-left, NAT below the subnet header, EBS volume beside the VPC edge, SQL

@@ -2,6 +2,8 @@
    --home-ink/--home-deep on white or --home-mist; --home-mist or white on --home-ink/--home-deep;
    --home-sage only for large text, icons and borders on dark backgrounds. */
 .lab-home {
+  color-scheme: light;
+  transition: background-color .3s, color .3s;
   --home-mist: #cad2c5;
   --home-sage: #84a98c;
   --home-teal: #52796f;
@@ -44,8 +46,13 @@
 .home-nav nav { display: flex; align-items: center; gap: 30px; font-size: 16px; font-weight: 500; }
 .home-nav nav > a { color: var(--home-mist); text-decoration: none; }
 .home-nav nav > a:hover { color: #fff; }
-.home-nav button { display: flex; align-items: center; gap: 10px; background: var(--home-mist); color: var(--home-ink); padding: 10px 18px; border-radius: 8px; font-size: 16px; font-weight: 600; }
-.home-nav button:hover { background: #fff; }
+.home-nav .home-nav-cta { display: flex; align-items: center; gap: 10px; background: var(--home-mist); color: var(--home-ink); padding: 10px 18px; border-radius: 8px; font-size: 16px; font-weight: 600; }
+.home-nav .home-nav-cta:hover { background: #fff; }
+.home-theme-toggle { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--home-mist); background: transparent; border: 1px solid rgba(202, 210, 197, .3); }
+.home-theme-toggle:hover { color: #fff; border-color: var(--home-mist); background: rgba(202, 210, 197, .1); }
+.home-theme-toggle svg { transition: transform .4s ease; }
+.home-theme-toggle:hover svg { transform: rotate(-25deg); }
+.home-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 11; pointer-events: none; background: var(--home-sage); transform-origin: 0 50%; transform: scaleX(var(--home-progress, 0)); }
 
 /* Hero */
 .home-hero-wrap { color: #fff; background:
@@ -294,6 +301,101 @@
 .home-skip { position: absolute; top: -100px; left: 16px; z-index: 20000; background: #fff; padding: 12px; }
 .home-skip:focus { top: 12px; }
 
+/* Hero entrance and scroll reveal. Hidden states apply only under .home-reveal-ready, which the
+   page adds once its IntersectionObserver is running. */
+.home-hero > div:first-child > *, .home-hero-trace { animation: home-rise .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+.home-hero > div:first-child > :nth-child(2) { animation-delay: .08s; }
+.home-hero > div:first-child > :nth-child(3) { animation-delay: .16s; }
+.home-hero > div:first-child > :nth-child(4) { animation-delay: .24s; }
+.home-hero-trace { animation-delay: .2s; animation-duration: .9s; }
+.home-hero-trace li { animation: home-in .4s ease-out backwards; }
+.home-hero-trace li:nth-child(1) { animation-delay: .6s; }
+.home-hero-trace li:nth-child(2) { animation-delay: .8s; }
+.home-hero-trace li:nth-child(3) { animation-delay: 1s; }
+.home-hero-trace .home-trace-final { animation: home-in .4s ease-out 1.2s backwards; }
+@keyframes home-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.home-reveal-ready .home-reveal { opacity: 0; transform: translateY(36px); transition: opacity .7s ease-out, transform .7s cubic-bezier(.2, .7, .2, 1); }
+.home-reveal-ready .home-reveal.is-visible { opacity: 1; transform: none; }
+.home-reveal-ready .home-reveal .home-stagger > *, .home-reveal-ready .home-reveal.home-stagger > * { opacity: 0; transform: translateY(18px); transition: opacity .5s ease-out, transform .5s cubic-bezier(.2, .7, .2, 1), border-color .18s, background-color .18s, box-shadow .18s; transition-delay: calc(.15s + var(--i, 0) * 70ms); }
+.home-reveal-ready .home-reveal.is-visible .home-stagger > *, .home-reveal-ready .home-reveal.is-visible.home-stagger > * { opacity: 1; transform: none; }
+.home-reveal-ready .home-reveal.is-visible .home-stagger > :hover { transition-delay: 0s; }
+.home-reveal-ready .home-reveal.is-visible .home-steps > li:hover { transform: translateY(-2px); }
+.home-reveal-ready .home-reveal.is-visible .home-community-actions > a:hover { transform: translateX(3px); }
+
+/* Dark theme. Hero, traces, community and footer are already dark; this re-colours the light
+   sections. The exported-PNG illustration stays white because real exports are white. */
+.lab-home[data-theme='dark'] {
+  color-scheme: dark;
+  --home-wash: #223035;
+  --home-line: #34464b;
+  --home-muted: #b3c2bc;
+  --home-text: #e6ece3;
+  --home-surface: #1c282c;
+  --home-canvas: #141d21;
+  background: #172125;
+  color: var(--home-text);
+}
+.lab-home[data-theme='dark'] .home-eyebrow, .lab-home[data-theme='dark'] .home-steps li:before { color: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-secondary { color: var(--home-text); border-color: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-secondary:hover { background: var(--home-wash); border-color: var(--home-mist); }
+.lab-home[data-theme='dark'] .home-tabs button:hover { color: #fff; background: #2c3d42; }
+.lab-home[data-theme='dark'] .home-tabs button[aria-selected='true'] { background: var(--home-sage); color: var(--home-night); }
+.lab-home[data-theme='dark'] .home-explorer-note a, .lab-home[data-theme='dark'] .home-section-lead a { color: #a9d1b2; }
+/* Scenario diagram follows the dark canvas */
+.lab-home[data-theme='dark'] .home-explorer-diagram { background-color: var(--home-canvas); background-image: radial-gradient(#2b3b40 1px, transparent 1px); }
+.lab-home[data-theme='dark'] .home-frame > span, .lab-home[data-theme='dark'] .home-edge-label { background: var(--home-canvas); }
+.lab-home[data-theme='dark'] .home-frame-public, .lab-home[data-theme='dark'] .home-frame-private { background: #18242a; box-shadow: none; }
+.lab-home[data-theme='dark'] .home-frame-vpc > span { color: #b794ff; }
+.lab-home[data-theme='dark'] .home-frame-public > span { color: #a7cc4a; }
+.lab-home[data-theme='dark'] .home-frame-private > span { color: #45cfd1; }
+.lab-home[data-theme='dark'] .home-frame-sg > span { color: #f87171; }
+.lab-home[data-theme='dark'] .home-snode-icon { background: transparent; }
+.lab-home[data-theme='dark'] .home-snode strong { color: var(--home-text); background: rgba(20, 29, 33, .9); }
+.lab-home[data-theme='dark'] .home-snode small { color: #9fb0aa; background: rgba(20, 29, 33, .9); }
+.lab-home[data-theme='dark'] .home-snode.is-deny .home-snode-icon, .lab-home[data-theme='dark'] .home-snode.is-down .home-snode-icon { background: #3b1d24; }
+.lab-home[data-theme='dark'] .home-snode.is-down small { color: #fda4af; }
+.lab-home[data-theme='dark'] .home-edge-ok line { stroke: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-arrow-ok { fill: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-edge-label-ok { color: #bfe0c6; border-color: var(--home-line); }
+.lab-home[data-theme='dark'] .home-edge-label-deny, .lab-home[data-theme='dark'] .home-edge-label-down { color: #fda4af; background: #3b1d24; border-color: #7f1d2d; }
+/* Dark-outline glyphs (client/user icons) would vanish on a dark canvas */
+.lab-home[data-theme='dark'] .home-canvas [stroke='#232F3E'] { stroke: var(--home-text); }
+.lab-home[data-theme='dark'] .home-about { background: #22312f; color: var(--home-text); }
+.lab-home[data-theme='dark'] .home-about p + p { color: var(--home-mist); }
+.lab-home[data-theme='dark'] .home-steps svg { color: var(--home-mist); background: var(--home-deep); }
+.lab-home[data-theme='dark'] .home-steps li:hover { box-shadow: 0 14px 28px -20px rgba(0, 0, 0, .8); }
+/* Interface sketch */
+.lab-home[data-theme='dark'] .home-sketch { background: var(--home-canvas); border-color: var(--home-line); box-shadow: 0 18px 40px -28px rgba(0, 0, 0, .8); }
+.lab-home[data-theme='dark'] .home-sketch b, .lab-home[data-theme='dark'] .home-area b { background: var(--home-sage); color: var(--home-night); }
+.lab-home[data-theme='dark'] .home-sketch-strip { background: #3a2716; color: #fdba74; border-bottom-color: #6b4120; }
+.lab-home[data-theme='dark'] .home-sketch-lib, .lab-home[data-theme='dark'] .home-sketch-inspector { background: var(--home-surface); }
+.lab-home[data-theme='dark'] .home-sketch-lib i.is-on { background: var(--home-canvas); color: var(--home-text); }
+.lab-home[data-theme='dark'] .home-sketch-lib span::after, .lab-home[data-theme='dark'] .home-sketch-inspector i { background: var(--home-line); }
+.lab-home[data-theme='dark'] .home-sketch-canvas { background-image: radial-gradient(#2b3b40 1px, transparent 1px); }
+.lab-home[data-theme='dark'] .home-sketch-vpc span { background: var(--home-wash); }
+.lab-home[data-theme='dark'] .home-sketch-bottom { background: var(--home-canvas); }
+.lab-home[data-theme='dark'] .home-sketch-bottom i.is-on { background: var(--home-text); color: var(--home-night); border-color: var(--home-text); }
+/* Table */
+.lab-home[data-theme='dark'] .home-table thead th { background: #0f171a; }
+.lab-home[data-theme='dark'] .home-table tbody th { color: var(--home-text); }
+.lab-home[data-theme='dark'] .home-table tbody tr.is-first, .lab-home[data-theme='dark'] .home-table tbody tr.is-first > * { border-top-color: #4a5f63; }
+.lab-home[data-theme='dark'] .home-area, .lab-home[data-theme='dark'] .home-save-where, .lab-home[data-theme='dark'] .home-labs li span { color: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-save-list li > svg, .lab-home[data-theme='dark'] .home-uses li > svg { color: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-png { border-color: var(--home-line); box-shadow: 0 24px 48px -30px rgba(0, 0, 0, .8); }
+.lab-home[data-theme='dark'] .home-png-bar { background: #0f171a; }
+.lab-home[data-theme='dark'] .home-png figcaption { background: var(--home-surface); border-top-color: var(--home-line); }
+/* Docs, contributors */
+.lab-home[data-theme='dark'] .home-docs-grid > div { background: var(--home-surface); }
+.lab-home[data-theme='dark'] .home-docs-grid h3, .lab-home[data-theme='dark'] .home-docs-grid a svg { color: var(--home-sage); }
+.lab-home[data-theme='dark'] .home-docs-grid a { color: var(--home-text); }
+.lab-home[data-theme='dark'] .home-docs-grid a:hover { color: #bfe0c6; }
+.lab-home[data-theme='dark'] .home-community { background: #10191c; }
+.lab-home[data-theme='dark'] .home-contributors li a { background: var(--home-surface); color: var(--home-text); }
+.lab-home[data-theme='dark'] .home-contributors li a:hover { background: var(--home-wash); }
+.lab-home[data-theme='dark'] .home-avatar { box-shadow: 0 0 0 3px #172125, 0 0 0 5px var(--home-sage); }
+.lab-home[data-theme='dark'] .home-footer-wrap { background: #10191c; }
+.lab-home[data-theme='dark'] .home-skip { background: var(--home-surface); color: var(--home-text); }
+
 @media (max-width: 1100px) {
   .home-docs-grid { grid-template-columns: repeat(2, 1fr); }
   .home-explorer-body { grid-template-columns: 1fr; }
@@ -336,5 +438,7 @@
 @media (prefers-reduced-motion: reduce) {
   .lab-home { scroll-behavior: auto; }
   .lab-home a, .lab-home button, .home-steps li { transition: none; transform: none !important; }
-  .home-edge, .home-edge-label, .home-edge line, .home-trace li, .home-trace .home-trace-final { animation: none !important; opacity: 1; }
+  .home-edge, .home-edge-label, .home-edge line, .home-trace li, .home-trace .home-trace-final,
+  .home-hero > div:first-child > *, .home-hero-trace, .home-hero-trace li, .home-hero-trace .home-trace-final { animation: none !important; opacity: 1; }
+  .home-progress, .home-theme-toggle svg { transition: none; }
 }

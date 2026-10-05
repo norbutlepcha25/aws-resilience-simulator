@@ -105,3 +105,14 @@
   .text-\[11px\] { font-size: 13px; }
   .text-\[12px\] { font-size: 14px; }
 }
+
+/* Dark canvas (ArchitectureCanvas adds `dark` to .lab-canvas). */
+.lab-canvas.dark {
+  --canvas-edge: #94A3B8;
+  color-scheme: dark;
+}
+.lab-canvas.dark .react-flow {
+  --xy-background-color: #0f1720;
+}
+/* Client/actor glyphs are drawn as dark outlines; lighten them so they stay visible. */
+.lab-canvas.dark .react-flow__node [stroke="#232F3E"] { stroke: #E2E8F0; }

@@ -6,7 +6,19 @@ overwrite stale sections instead of appending; `git log` is the changelog.
 Full objective/intent/architecture rules live in the root `CLAUDE.md` — this
 file only tracks what's currently true and in flight.
 
-Last updated: 2026-10-05 (Claude). UNCOMMITTED: home page (src/components/home/, App.tsx #home/#lab
+Last updated: 2026-10-05 (Claude). UNCOMMITTED (latest): light/dark mode + home scroll animation.
+utils/theme.ts useTheme() shares one preference (localStorage `cloud-architecture-lab:theme`, default =
+OS prefers-color-scheme) between home and canvas; layout/ThemeToggle.tsx is the button (home nav, and
+canvas top-right beside Layers). Home: `.lab-home[data-theme=dark]` overrides in home.css (exported-PNG
+illustration intentionally stays white). Canvas: ArchitectureCanvas adds `dark` to `.lab-canvas` wrapper,
+so Tailwind dark: variants apply ONLY inside the canvas (palette, inspector, modals, sim bar stay light —
+not themed yet); React Flow colorMode follows; default edge stroke uses var(--canvas-edge); #232F3E glyph
+strokes lightened via index.css. PNG export temporarily drops `dark` so exports stay white/light.
+Scroll animation: `.home-reveal` sections fade up via IntersectionObserver, `.home-stagger` children
+stagger; hidden only after `.home-reveal-ready` is set, skipped under prefers-reduced-motion; hero
+entrance keyframes; top scroll-progress bar. 456 engine + 34 UI tests pass, build passes; headless
+Chrome checked home light/dark and empty dark canvas (nodes on dark canvas not visually checked).
+Earlier same day, now committed (b2fc1af): home page (src/components/home/, App.tsx #home/#lab
 hash routing, AppHeader Home button). Restyled with sage/slate palette (#cad2c5 #84a98c #52796f
 #354f52 #2f3e46), Inter → Roboto → sans-serif (loaded in index.html; home only, app still IBM Plex),
 base font 18px. Contributors fetched live from GitHub API /contributors (type User, bot/AI names

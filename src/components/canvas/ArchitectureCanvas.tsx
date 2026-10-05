@@ -22,9 +22,11 @@ import { NodeStatusModal } from './NodeStatusModal.tsx';
 import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
 import { ServiceNodeData, NodeHealth } from '../../types/index.ts';
 import { Route, Shield } from 'lucide-react';
+import { useTheme } from '../../utils/theme.ts';
+import { ThemeToggle } from '../layout/ThemeToggle.tsx';
 
 const nodeTypes = {
-  asgMembershipFrame: ({ data }: any) => <div className="w-full h-full border-2 border-dashed border-orange-500 rounded-xl pointer-events-none bg-transparent"><span className="absolute left-3 top-1 px-1 bg-white text-xs font-semibold text-orange-700">{data.label} · membership</span></div>,
+  asgMembershipFrame: ({ data }: any) => <div className="w-full h-full border-2 border-dashed border-orange-500 rounded-xl pointer-events-none bg-transparent"><span className="absolute left-3 top-1 px-1 bg-white text-xs font-semibold text-orange-700 dark:bg-[#0f1720] dark:text-orange-300">{data.label} · membership</span></div>,
   serviceNode: ServiceNode,
   boundaryNode: BoundaryNode
 };
@@ -64,6 +66,8 @@ export const ArchitectureCanvas: React.FC = () => {
   } = useArchitecture();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [theme, toggleTheme] = useTheme();
+  const dark = theme === 'dark';
   const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
   // Project visibility into React Flow without modifying the architecture used by the engine.
   const hiddenNodeIds = new Set(nodes.filter(node => hiddenLayers.has(canvasLayerKey(node))).map(node => node.id));
@@ -203,8 +207,9 @@ export const ArchitectureCanvas: React.FC = () => {
     setContextMenu(null);
   }, [setSelectedNodeId, setSelectedEdgeId]);
 
+  // `dark` scopes Tailwind dark: variants to the canvas; the rest of the lab stays light.
   return (
-    <div className="relative w-full h-full bg-white flex-1 overflow-hidden select-none" ref={reactFlowWrapper}>
+    <div className={`lab-canvas relative w-full h-full flex-1 overflow-hidden select-none ${dark ? 'dark bg-[#0f1720]' : 'bg-white'}`} ref={reactFlowWrapper}>
       <ReactFlow
         key={canvasRevision}
         nodes={[...visibleNodes, ...displayedFrames]}
@@ -228,6 +233,7 @@ export const ArchitectureCanvas: React.FC = () => {
         minZoom={0.2}
         maxZoom={2.0}
         proOptions={{ hideAttribution: true }}
+        colorMode={theme}
         // Boundary containers (VPC, subnet, security group) carry their own z-index so they can
         // stack against each other, and public/private subnets render with an opaque background.
         // Under React Flow's default "basic" z mode, connection edges only elevate above a node
@@ -244,12 +250,12 @@ export const ArchitectureCanvas: React.FC = () => {
           variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
-          color="#E2E8F0"
+          color={dark ? '#2A3646' : '#E2E8F0'}
         />
 
         {/* Clean Controls */}
         <Controls
-          className="!bg-white !border !border-slate-200 !rounded-lg !shadow-md !overflow-hidden [&>button]:!bg-white [&>button]:!border-b [&>button]:!border-slate-100 [&>button]:!text-slate-600 [&>button:hover]:!bg-slate-50"
+          className="!bg-white !border !border-slate-200 !rounded-lg !shadow-md !overflow-hidden [&>button]:!bg-white [&>button]:!border-b [&>button]:!border-slate-100 [&>button]:!text-slate-600 [&>button:hover]:!bg-slate-50 dark:!bg-slate-900 dark:!border-slate-700 dark:[&>button]:!bg-slate-900 dark:[&>button]:!border-slate-800 dark:[&>button]:!text-slate-300 dark:[&>button]:!fill-slate-300 dark:[&>button:hover]:!bg-slate-800"
           showInteractive={false}
         />
 
@@ -262,8 +268,8 @@ export const ArchitectureCanvas: React.FC = () => {
             onClick={toggleTaskFlow}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium shadow-xs transition-all cursor-pointer backdrop-blur-sm ${
               highlightTaskFlow
-                ? 'bg-white/95 border-circuit-400 text-circuit-700 ring-2 ring-circuit-500/10'
-                : 'bg-white/80 border-slate-200 text-slate-600 hover:bg-white'
+                ? 'bg-white/95 border-circuit-400 text-circuit-700 ring-2 ring-circuit-500/10 dark:bg-slate-900/95 dark:text-circuit-300'
+                : 'bg-white/80 border-slate-200 text-slate-600 hover:bg-white dark:bg-slate-900/80 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900'
             }`}
             title={highlightTaskFlow ? 'Task flow line highlights enabled (click to disable)' : 'Click to highlight task flow lines'}
           >
@@ -279,7 +285,7 @@ export const ArchitectureCanvas: React.FC = () => {
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold shadow-xs transition-all cursor-pointer backdrop-blur-sm ${
                 showNaclSideColumn
                   ? 'bg-circuit-600 text-white border-circuit-600 ring-2 ring-circuit-400/30'
-                  : 'bg-white/95 border-slate-200 text-slate-700 hover:bg-white hover:border-circuit-300'
+                  : 'bg-white/95 border-slate-200 text-slate-700 hover:bg-white hover:border-circuit-300 dark:bg-slate-900/95 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900'
               }`}
               title="Open NACL Details & Signal Monitor in Side Column"
             >
@@ -290,7 +296,14 @@ export const ArchitectureCanvas: React.FC = () => {
           )}
         </Panel>
 
-        <Panel position="top-right" className="m-3">
+        <Panel position="top-right" className="m-3 flex items-center gap-2">
+          <ThemeToggle
+            theme={theme}
+            onToggle={toggleTheme}
+            iconSize={14}
+            showLabel
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          />
           <CanvasLayers nodes={[...nodes, ...membershipFrames]} hidden={hiddenLayers} onChange={setHiddenLayers} />
         </Panel>
 
@@ -299,8 +312,8 @@ export const ArchitectureCanvas: React.FC = () => {
             set" preset, which defaults to a complete rule set with no missing return). */}
         {hasMissingReturnNacl && (
           <Panel position="top-center" className="m-3">
-            <div className="px-4 py-1.5 rounded-xl bg-white/95 border border-slate-300 shadow-sm backdrop-blur-sm pointer-events-none text-center">
-              <span className="text-xs font-bold text-slate-800 tracking-wide font-sans">
+            <div className="px-4 py-1.5 rounded-xl bg-white/95 border border-slate-300 shadow-sm backdrop-blur-sm pointer-events-none text-center dark:bg-slate-900/95 dark:border-slate-700">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wide font-sans">
                 Architectural Diagram addressing problem 3.1: Cause of connection timeout due to custom NACLs
               </span>
             </div>

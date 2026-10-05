@@ -3,6 +3,8 @@ import { ArrowRight, GitBranch, MessageSquare, Bug, ShieldAlert, Play, Layers, B
 import { AwsServiceIcon } from '../icons/AwsServiceIcons.tsx';
 import { VpcGroupIcon, PublicSubnetGroupIcon, PrivateSubnetGroupIcon } from '../icons/AwsGroupIcons.tsx';
 import { COURSE_LABS } from '../../data/courseLabs.ts';
+import { useTheme } from '../../utils/theme.ts';
+import { ThemeToggle } from '../layout/ThemeToggle.tsx';
 
 const repository = 'https://github.com/norbutlepcha25/cloud-architecture-lab';
 // Human authors from repository history, used until (or if) the live GitHub list cannot load.
@@ -244,7 +246,7 @@ function InterfaceSketch() {
 }
 
 function InterfaceGuide() {
-  return <section id="guide" className="home-section home-guide"><h2>How the lab is laid out.</h2><p className="home-section-lead">Six areas, numbered below. The table explains every control, area by area.</p>
+  return <section id="guide" className="home-section home-guide home-reveal"><h2>How the lab is laid out.</h2><p className="home-section-lead">Six areas, numbered below. The table explains every control, area by area.</p>
     <InterfaceSketch />
     <div className="home-table-wrap"><table className="home-table">
       <caption className="home-visually-hidden">Interface guide: each control, what it does, and how to use it</caption>
@@ -267,9 +269,9 @@ const workFeatures = [
 ];
 
 function WorkFeatures() {
-  return <section id="save" className="home-section home-save"><h2>Save, share and export.</h2><p className="home-section-lead">Your work stays on your device. Move it between computers with a JSON file, or drop the diagram into a report.</p>
+  return <section id="save" className="home-section home-save home-reveal"><h2>Save, share and export.</h2><p className="home-section-lead">Your work stays on your device. Move it between computers with a JSON file, or drop the diagram into a report.</p>
     <div className="home-save-grid">
-      <ul className="home-save-list">{workFeatures.map(f => <li key={f.name}><f.icon size={24} /><div><h3>{f.name}</h3><p className="home-save-where">{f.where}</p><p>{f.text}</p></div></li>)}</ul>
+      <ul className="home-save-list home-stagger">{workFeatures.map(f => <li key={f.name}><f.icon size={24} /><div><h3>{f.name}</h3><p className="home-save-where">{f.where}</p><p>{f.text}</p></div></li>)}</ul>
       <figure className="home-png" aria-label="Example of a downloaded architecture image">
         <div className="home-png-bar"><ImageDown size={15} />aws-architecture-diagram.png<span>1920 × 1080</span></div>
         <div className="home-png-body">
@@ -326,8 +328,8 @@ const awsDocs: Array<{ group: string; links: Array<[string, string]> }> = [
 ];
 
 function AwsDocs() {
-  return <section id="aws-docs" className="home-section home-docs"><h2>Learn it from the source.</h2><p className="home-section-lead">AWS behaviour on this page and in the lab is based on the official AWS documentation. When the lab and AWS disagree, AWS is right — please <a href={`${repository}/issues/new?title=AWS%20behaviour%3A%20`} target="_blank" rel="noopener noreferrer">report it</a>.</p>
-    <div className="home-docs-grid">{awsDocs.map(g => <div key={g.group}><h3>{g.group}</h3><ul>{g.links.map(([label, url]) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer">{label}<ExternalLink size={14} aria-hidden="true" /></a></li>)}</ul></div>)}</div>
+  return <section id="aws-docs" className="home-section home-docs home-reveal"><h2>Learn it from the source.</h2><p className="home-section-lead">AWS behaviour on this page and in the lab is based on the official AWS documentation. When the lab and AWS disagree, AWS is right — please <a href={`${repository}/issues/new?title=AWS%20behaviour%3A%20`} target="_blank" rel="noopener noreferrer">report it</a>.</p>
+    <div className="home-docs-grid home-stagger">{awsDocs.map(g => <div key={g.group}><h3>{g.group}</h3><ul>{g.links.map(([label, url]) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer">{label}<ExternalLink size={14} aria-hidden="true" /></a></li>)}</ul></div>)}</div>
   </section>;
 }
 
@@ -366,11 +368,42 @@ const useCases = [
   { icon: Terminal, name: 'Design reviews', text: 'Sketch an idea, send a request through it, and talk about why it fails.' },
 ];
 
+// Scroll animation: `.home-reveal` blocks fade up as they enter view; children of `.home-stagger`
+// follow one after another. Content is hidden only once the observer is running, and never when the
+// visitor asks for reduced motion, so the page still reads fully if this effect does not run.
+function useScrollEffects(root: React.RefObject<HTMLDivElement>) {
+  React.useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const onScroll = () => {
+      const max = el.scrollHeight - el.clientHeight;
+      el.style.setProperty('--home-progress', String(max > 0 ? el.scrollTop / max : 0));
+    };
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof IntersectionObserver !== 'function') return () => el.removeEventListener('scroll', onScroll);
+    el.querySelectorAll('.home-stagger').forEach(list => Array.from(list.children).forEach((child, i) => (child as HTMLElement).style.setProperty('--i', String(Math.min(i, 12)))));
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('is-visible');
+      observer.unobserve(entry.target);
+    }), { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+    el.querySelectorAll('.home-reveal').forEach(target => observer.observe(target));
+    el.classList.add('home-reveal-ready');
+    return () => { observer.disconnect(); el.removeEventListener('scroll', onScroll); el.classList.remove('home-reveal-ready'); };
+  }, [root]);
+}
+
 export function HomePage({ onStart }: { onStart: () => void }) {
   const contributors = useContributors();
-  return <div className="lab-home">
+  const [theme, toggleTheme] = useTheme();
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  useScrollEffects(rootRef);
+  return <div className="lab-home" data-theme={theme} ref={rootRef}>
+    <div className="home-progress" aria-hidden="true" />
     <a className="home-skip" href="#home-main">Skip to content</a>
-    <div className="home-nav-wrap"><header className="home-nav"><a href="#" className="home-brand"><Layers size={28} />Cloud Architecture Lab</a><nav aria-label="Home navigation"><a href="#see-it">See it work</a><a href="#guide">Guide</a><a href="#save">Save &amp; export</a><a href="#labs">Labs</a><a href="#aws-docs">AWS docs</a><button onClick={onStart}>Open the lab <ArrowRight size={16} /></button></nav></header></div>
+    <div className="home-nav-wrap"><header className="home-nav"><a href="#" className="home-brand"><Layers size={28} />Cloud Architecture Lab</a><nav aria-label="Home navigation"><a href="#see-it">See it work</a><a href="#guide">Guide</a><a href="#save">Save &amp; export</a><a href="#labs">Labs</a><a href="#aws-docs">AWS docs</a><ThemeToggle theme={theme} onToggle={toggleTheme} className="home-theme-toggle" iconSize={18} /><button className="home-nav-cta" onClick={onStart}>Open the lab <ArrowRight size={16} /></button></nav></header></div>
     <main id="home-main">
       <div className="home-hero-wrap"><section className="home-hero">
         <div>
@@ -389,18 +422,18 @@ export function HomePage({ onStart }: { onStart: () => void }) {
           <p className="home-trace-final is-bad"><ShieldAlert size={17} /> Source not in 10.0.1.0/24</p>
         </div>
       </section>
-      <section className="home-stats" aria-label="At a glance">
+      <section className="home-stats home-stagger home-reveal" aria-label="At a glance">
         <div><strong>0</strong><span>AWS accounts or credentials needed</span></div>
         <div><strong>$0</strong><span>cloud bill — nothing is provisioned</span></div>
         <div><strong>{COURSE_LABS.length}</strong><span>guided labs with reference diagrams</span></div>
         <div><strong>Every hop</strong><span>explained: route, NACL, security group, IAM</span></div>
       </section></div>
 
-      <section id="see-it" className="home-section"><h2>Follow a request. Read the decision.</h2><p className="home-section-lead">Pick a scenario. The diagram shows the path; the trace shows each rule the lab checked.</p><ScenarioExplorer /></section>
+      <section id="see-it" className="home-section home-reveal"><h2>Follow a request. Read the decision.</h2><p className="home-section-lead">Pick a scenario. The diagram shows the path; the trace shows each rule the lab checked.</p><ScenarioExplorer /></section>
 
-      <section className="home-about"><h2>A diagram you can experiment with.</h2><div><p>Cloud Architecture Lab is an independent, open-source learning environment for students, educators, and anyone curious about cloud system design. It brings architecture diagrams together with configuration, request traces, failure experiments, and guided labs.</p><p>Simulation coverage varies by service. Use the explanations and coverage indicators to understand what is modeled; some behaviors are partial or simplified.</p></div></section>
+      <section className="home-about home-reveal"><h2>A diagram you can experiment with.</h2><div><p>Cloud Architecture Lab is an independent, open-source learning environment for students, educators, and anyone curious about cloud system design. It brings architecture diagrams together with configuration, request traces, failure experiments, and guided labs.</p><p>Simulation coverage varies by service. Use the explanations and coverage indicators to understand what is modeled; some behaviors are partial or simplified.</p></div></section>
 
-      <section id="how-it-works" className="home-section"><h2>Your first experiment</h2><p className="home-section-lead">Start with a guided lab or build your own architecture.</p><ol className="home-steps">
+      <section id="how-it-works" className="home-section home-reveal"><h2>Your first experiment</h2><p className="home-section-lead">Start with a guided lab or build your own architecture.</p><ol className="home-steps home-stagger">
         <li><BookOpen /><h3>Choose a starting point</h3><p>Open the lab, then choose Labs or Reference Diagrams. Load an example or start with the default network.</p></li>
         <li><Layers /><h3>Build and configure</h3><p>Add services from the palette, connect them, and select a resource to edit its settings. More information opens supported component views.</p></li>
         <li><Play /><h3>Send a request</h3><p>Choose your request settings and send it through the architecture. Read the timeline to see each decision and its explanation.</p></li>
@@ -411,24 +444,24 @@ export function HomePage({ onStart }: { onStart: () => void }) {
 
       <WorkFeatures />
 
-      <section className="home-section home-quickstart"><div><h2>Open it in a tab, or run it yourself.</h2><p className="home-section-lead">The lab is a static web app. Use the hosted version, or run your own copy for a class.</p></div><QuickStart onStart={onStart} /></section>
+      <section className="home-section home-quickstart home-reveal"><div><h2>Open it in a tab, or run it yourself.</h2><p className="home-section-lead">The lab is a static web app. Use the hosted version, or run your own copy for a class.</p></div><QuickStart onStart={onStart} /></section>
 
-      <section id="labs" className="home-section home-labs"><h2>{COURSE_LABS.length} labs, from IAM to observability.</h2><p className="home-section-lead">Each lab loads ready-made diagrams: a working design and a broken one to diagnose.</p><ol>
+      <section id="labs" className="home-section home-labs home-reveal"><h2>{COURSE_LABS.length} labs, from IAM to observability.</h2><p className="home-section-lead">Each lab loads ready-made diagrams: a working design and a broken one to diagnose.</p><ol className="home-stagger">
         {COURSE_LABS.map(l => <li key={l.id}><span>{String(l.number).padStart(2, '0')}</span>{l.title}</li>)}
       </ol><button className="home-secondary" onClick={onStart}>Open the labs <ArrowRight size={17} /></button></section>
 
-      <section className="home-section home-uses"><h2>Made for learning together.</h2><ul>
+      <section className="home-section home-uses home-reveal"><h2>Made for learning together.</h2><ul className="home-stagger">
         {useCases.map(u => <li key={u.name}><u.icon size={22} /><div><h3>{u.name}</h3><p>{u.text}</p></div></li>)}
       </ul></section>
 
       <AwsDocs />
 
-      <section id="community" className="home-community"><div><h2>Everyone is welcome<br />to help shape the lab.</h2><p>You do not need to be an AWS expert to contribute. Ask a question, share a teaching idea, report unexpected behavior, improve a lab, or propose a code change.</p><p>Feedback lives in the public GitHub repository. A GitHub account is needed to post; you can browse without one.</p></div><div className="home-community-actions">
+      <section id="community" className="home-community home-reveal"><div><h2>Everyone is welcome<br />to help shape the lab.</h2><p>You do not need to be an AWS expert to contribute. Ask a question, share a teaching idea, report unexpected behavior, improve a lab, or propose a code change.</p><p>Feedback lives in the public GitHub repository. A GitHub account is needed to post; you can browse without one.</p></div><div className="home-community-actions home-stagger">
         <a href={`${repository}/issues/new?title=Bug%3A%20&body=What%20happened%3F%0A%0ASteps%20to%20reproduce%3A%0A%0AExpected%20behavior%3A%0A%0ALab%20or%20service%3A%0A`} target="_blank" rel="noopener noreferrer"><Bug /><div><h3>Report an issue</h3><p>Describe the behavior and how to reproduce it.</p></div><ArrowRight /></a>
         <a href={`${repository}/issues/new?title=Feedback%3A%20&body=My%20question%2C%20idea%2C%20or%20feedback%3A%0A`} target="_blank" rel="noopener noreferrer"><MessageSquare /><div><h3>Leave a comment or idea</h3><p>Start a feedback thread, or comment on an existing issue.</p></div><ArrowRight /></a>
         <a href={repository} target="_blank" rel="noopener noreferrer"><GitBranch /><div><h3>Contribute to the project</h3><p>Explore the source, documentation, and open issues.</p></div><ArrowRight /></a>
       </div></section>
-      <section className="home-section home-contributors"><h2>People building the lab</h2><ul>{contributors.map(c => <ContributorCard key={c.login} c={c} />)}</ul></section>
+      <section className="home-section home-contributors home-reveal"><h2>People building the lab</h2><ul className="home-stagger">{contributors.map(c => <ContributorCard key={c.login} c={c} />)}</ul></section>
     </main>
     <div className="home-footer-wrap"><footer className="home-footer">
       <div className="home-footer-brand"><a href="#" className="home-brand"><Layers size={24} />Cloud Architecture Lab</a><p>Open source · MIT License</p><button onClick={onStart}>Open the lab <ArrowRight size={16} /></button></div>

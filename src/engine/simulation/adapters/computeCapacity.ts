@@ -1,4 +1,5 @@
 import { asgReady } from '../../scaling/asg.ts';
+import { eksModel } from '../../service/models/eks.ts';
 import { ecsModel } from '../../service/models/ecs.ts';
 import type { AdapterContext, AdapterSignal } from './types.ts';
 import { CONTINUE, TERMINATE } from './types.ts';
@@ -32,6 +33,22 @@ export const computeCapacityAdapter = (ctx: AdapterContext): AdapterSignal => {
       action: 'ECS running task availability', status: outcome.status === 'failure' ? 'failed' : 'success',
       explanation: outcome.status === 'failure' ? outcome.reason : outcome.detail,
       targetHealth: node.data.health, latencyMs: 0 });
+    if (outcome.status === 'failure') { trace.fail(outcome.statusCode, outcome.reason); return TERMINATE; }
+    return CONTINUE;
+  }
+
+  if (node.data.serviceId === 'eks') {
+    const outcome = eksModel.processRequest({ target: node.data, action: scenario.method });
+    const reason = outcome.status === 'failure' ? outcome.reason : outcome.detail;
+    trace.pushStep({ sourceNodeId: node.id, targetNodeId: node.id, sourceNodeName: node.data.label, targetNodeName: node.data.label,
+      protocol: 'HTTP', action: 'EKS Service endpoint availability', status: outcome.status === 'failure' ? 'failed' : 'success',
+      explanation: reason, targetHealth: node.data.health, latencyMs: 0, details: { decision: {
+        order: trace.steps.length, component: 'Service', resource: node.data.label, operation: 'eks-ready-endpoints',
+        input: { config: node.data.customConfig?.eks ?? {}, legacyReplicas: node.data.replicas },
+        decision: outcome.status === 'failure' ? 'DENY' : 'ALLOW', reason, simpleExplanation: reason,
+        awsRule: 'A Kubernetes Service selects pod endpoints; readiness determines normal eligible endpoints. https://kubernetes.io/docs/concepts/services-networking/service/',
+        metadata: { coverage: 'observed-workload-snapshot', hpaExecuted: false }
+      } } });
     if (outcome.status === 'failure') { trace.fail(outcome.statusCode, outcome.reason); return TERMINATE; }
     return CONTINUE;
   }

@@ -19,7 +19,7 @@
 export const LIVE_ADAPTER_SERVICE_IDS = [
   'cloudwatch', 'cloudtrail', // managedServices.ts (bounded operation model)
   'waf',                                            // perimeterInspection.ts
-  'ec2', 'ecs', 'lambda', 'fargate', 'app_runner',  // computeCapacity.ts (COMPUTE_SERVICE_IDS)
+  'ec2', 'ecs', 'eks', 'lambda', 'fargate', 'app_runner',  // computeCapacity.ts (COMPUTE_SERVICE_IDS)
   'nat_gateway',                                     // natGatewayHop.ts
   'rds', 'dynamodb', 's3', 'elasticache', 'aurora', // terminalNode.ts (TERMINAL_DATA_STORE_SERVICE_IDS)
   'cloudfront',                                      // cloudFront.ts
@@ -43,6 +43,7 @@ export const REQUEST_SIMULATION_EVIDENCE: Record<string, string> = {
   cloudtrail: 'test/managed-services.test.ts: live audit event selection',
   sns: 'test/managed-services.test.ts: live SNS fanout to permitted queues',
   ec2: 'test/engine.test.ts (tests 2-4, HA template); tests/aws-conformance/compute/ec2.test.ts SVC-EC2-SUCCESS-001',
+  eks: 'test/eks-live.test.ts: Ready endpoint gating, selectors and no implicit scaling',
   ecs: 'test/engine.test.ts (tests 2-4, HA template - node-ecs-az-a/b)',
   fargate: 'tests/aws-conformance/compute/fargate.test.ts SVC-FARGATE-SUCCESS-001, SVC-FARGATE-SERVERLESS-SCALING-001',
   lambda: 'tests/aws-conformance/compute/lambda.test.ts SVC-LAMBDA-SUCCESS-001',

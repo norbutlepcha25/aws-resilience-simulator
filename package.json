@@ -1,5 +1,5 @@
 {
-  "name": "aws-resilience-simulator",
+  "name": "cloud-architecture-lab",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -13,8 +13,9 @@
     "preview": "vite preview",
     "references:sync": "node scripts/generate-references.mjs",
     "labs:sync": "node scripts/generate-labs.mjs",
-    "predev": "npm run references:sync && npm run labs:sync",
-    "prebuild": "npm run references:sync && npm run labs:sync",
+    "theme:sync": "node scripts/generate-lab-dark-theme.mjs",
+    "predev": "npm run references:sync && npm run labs:sync && npm run theme:sync",
+    "prebuild": "npm run references:sync && npm run labs:sync && npm run theme:sync",
     "pretest": "npm run references:sync && npm run labs:sync"
   },
   "dependencies": {

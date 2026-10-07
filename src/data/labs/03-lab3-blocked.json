@@ -143,8 +143,8 @@
       "id": "lab-igw",
       "type": "serviceNode",
       "position": {
-        "x": 450,
-        "y": 60
+        "x": 242,
+        "y": 84
       },
       "data": {
         "serviceId": "internet_gateway",
@@ -161,8 +161,8 @@
       "id": "lab-nat",
       "type": "serviceNode",
       "position": {
-        "x": 450,
-        "y": 300
+        "x": 480,
+        "y": 298
       },
       "data": {
         "serviceId": "nat_gateway",
@@ -217,18 +217,18 @@
       "id": "lab-app-sg",
       "type": "boundaryNode",
       "position": {
-        "x": 1270,
-        "y": 50
+        "x": 240,
+        "y": 305
       },
       "style": {
-        "width": 220,
-        "height": 120
+        "width": 180,
+        "height": 160
       },
       "data": {
         "label": "usms-app-sg",
         "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
+        "width": 180,
+        "height": 160,
         "allowedProtocols": [
           "HTTP",
           "HTTPS"
@@ -239,18 +239,18 @@
       "id": "lab-db-sg",
       "type": "boundaryNode",
       "position": {
-        "x": 1270,
-        "y": 210
+        "x": 240,
+        "y": 625
       },
       "style": {
-        "width": 220,
-        "height": 120
+        "width": 180,
+        "height": 160
       },
       "data": {
         "label": "usms-db-sg",
         "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
+        "width": 180,
+        "height": 160,
         "securityGroupRules": {
           "inbound": [],
           "outbound": []
@@ -261,8 +261,8 @@
       "id": "lab-web",
       "type": "serviceNode",
       "position": {
-        "x": 250,
-        "y": 300
+        "x": 270,
+        "y": 340
       },
       "data": {
         "serviceId": "ec2",
@@ -283,8 +283,8 @@
       "id": "lab-db",
       "type": "serviceNode",
       "position": {
-        "x": 250,
-        "y": 640
+        "x": 270,
+        "y": 660
       },
       "data": {
         "serviceId": "ec2",
@@ -304,8 +304,8 @@
       "id": "lab-volume",
       "type": "serviceNode",
       "position": {
-        "x": 1550,
-        "y": 300
+        "x": 1260,
+        "y": 340
       },
       "data": {
         "serviceId": "ebs",
@@ -336,6 +336,8 @@
       "id": "lab-web-lab-db",
       "source": "lab-web",
       "target": "lab-db",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
       "type": "custom",
       "data": {
         "protocol": "SQL",

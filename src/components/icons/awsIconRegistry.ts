@@ -1,6 +1,6 @@
 // Comprehensive mapping from service ID to official AWS SVG asset in src/components/serviceIcon
 
-// Vite eager glob import of all 302 official SVG icons
+// Vite eager glob import of all official SVG icons
 const svgModules: Record<string, string> = import.meta.glob('../serviceIcon/*.svg', {
   eager: true,
   import: 'default'
@@ -90,16 +90,19 @@ const SERVICE_ID_TO_SVG_FILE: Record<string, string> = {
   'gateway_load_balancer': 'elastic-load-balancing.svg',
   'cloudfront': 'amazon-cloud-front.svg',
   'route53': 'amazon-route-53.svg',
-  'route_tables': 'amazon-route-53.svg',
+  // VPC resources use AWS's resource icons (Architecture Icons package, Resource-Icons), not the VPC service icon.
+  'route_tables': 'amazon-vpc-router.svg',
   'route53_resolver': 'amazon-route-53.svg',
   'transit_gateway': 'aws-transit-gateway.svg',
   'direct_connect': 'aws-direct-connect.svg',
-  'nat_gateway': 'amazon-virtual-private-cloud.svg',
-  'internet_gateway': 'amazon-virtual-private-cloud.svg',
+  'nat_gateway': 'amazon-vpc-nat-gateway.svg',
+  'internet_gateway': 'amazon-vpc-internet-gateway.svg',
+  's3_gateway_endpoint': 'amazon-vpc-endpoints.svg',
+  's3_endpoint': 'amazon-vpc-endpoints.svg',
   'vpn_gateway': 'aws-site-to-site-vpn.svg',
   'privatelink': 'aws-private-link.svg',
   'vpc_lattice': 'amazon-vpc-lattice.svg',
-  'vpc_peering': 'amazon-virtual-private-cloud.svg',
+  'vpc_peering': 'amazon-vpc-peering-connection.svg',
   'global_accelerator': 'aws-global-accelerator.svg',
   'network_firewall': 'aws-network-firewall.svg',
   'network_firewall_sec': 'aws-network-firewall.svg',

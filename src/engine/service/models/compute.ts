@@ -116,9 +116,7 @@ export const fargateModel = buildComputeModel('fargate', 'Serverless compute eng
   { id: 'fargate-scheduler-task-failure', description: 'Task fails the ECS/EKS scheduler\'s health check, is stopped and replaced.', detectionSystem: 'ecs_scheduler' }
 ]);
 
-export const eksModel = buildComputeModel('eks', 'Managed Kubernetes control plane and worker node orchestration.', false, ['rds', 's3'], [
-  { id: 'eks-node-health-check', description: 'A worker node fails its kubelet health check; Kubernetes reschedules its pods onto healthy nodes.', detectionSystem: 'asg_health_check' }
-]);
+export { eksModel } from './eks.ts';
 
 export const lambdaModel = buildComputeModel('lambda', 'Serverless event-driven compute functions.', true, ['dynamodb', 'rds', 'step_functions'], [
   { id: 'lambda-timeout', description: 'Function execution exceeds its configured timeout.', detectionSystem: 'manual' },

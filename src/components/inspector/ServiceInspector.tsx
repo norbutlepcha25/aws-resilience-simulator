@@ -11,6 +11,7 @@ import { supportsSecurityGroupAttachment } from '../../engine/network/securityGr
 import React, { useEffect, useState } from 'react';
 import { LabConfigurationPanel } from './LabConfigurationPanel.tsx';
 import { ServiceBehaviorExplorer, BEHAVIOR_EXPLORER_SERVICES } from '../learning/ServiceBehaviorExplorer.tsx';
+import { EksExplorer } from '../eks/EksExplorer.tsx';
 import { EcsExplorer } from '../ecs/EcsExplorer.tsx';
 import { EcsConfigurationPanel } from './EcsConfigurationPanel.tsx';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
@@ -28,7 +29,6 @@ import {
   BookOpen,
   Flag,
   Cloud,
-  Lock,
   Shield,
   Server,
   Copy,
@@ -48,6 +48,7 @@ import {
   Database,
   Info
 } from 'lucide-react';
+import { VpcGroupIcon, PublicSubnetGroupIcon, PrivateSubnetGroupIcon } from '../icons/AwsGroupIcons.tsx';
 import {
   calculateNodeCost,
   EC2_INSTANCE_TYPES,
@@ -352,10 +353,10 @@ export const ServiceInspector: React.FC = () => {
       },
       vpc: {
         title: 'Virtual Private Cloud (VPC)',
-        color: '#16A34A',
-        bgColor: '#EEF7E8',
-        badgeBg: '#16A34A',
-        icon: <Cloud className="w-3.5 h-3.5 text-white" />,
+        color: '#8C4FFF',
+        bgColor: '#F4EEFF',
+        badgeBg: '#8C4FFF',
+        icon: <VpcGroupIcon size={32} className="rounded-lg" />,
         scope: 'Regional Virtual Network',
         defaultCidr: '10.0.0.0/16',
         teachingNotes: [
@@ -366,10 +367,10 @@ export const ServiceInspector: React.FC = () => {
       },
       public_subnet: {
         title: 'Public Subnet',
-        color: '#16A34A',
-        bgColor: '#EEF7E8',
-        badgeBg: '#16A34A',
-        icon: <Lock className="w-3.5 h-3.5 text-white" />,
+        color: '#7AA116',
+        bgColor: '#F2F8E8',
+        badgeBg: '#7AA116',
+        icon: <PublicSubnetGroupIcon size={32} className="rounded-lg" />,
         scope: 'Zonal (Bound to 1 AZ)',
         defaultCidr: '10.0.1.0/24',
         teachingNotes: [
@@ -380,10 +381,10 @@ export const ServiceInspector: React.FC = () => {
       },
       private_subnet: {
         title: 'Private Subnet',
-        color: '#0073BB',
-        bgColor: '#EEF6FC',
-        badgeBg: '#0073BB',
-        icon: <Lock className="w-3.5 h-3.5 text-white" />,
+        color: '#00A4A6',
+        bgColor: '#E6F6F6',
+        badgeBg: '#00A4A6',
+        icon: <PrivateSubnetGroupIcon size={32} className="rounded-lg" />,
         scope: 'Zonal (Bound to 1 AZ)',
         defaultCidr: '10.0.2.0/24',
         teachingNotes: [
@@ -1008,6 +1009,7 @@ export const ServiceInspector: React.FC = () => {
   return (
     <aside className="w-80 bg-white border-l border-slate-200 flex flex-col h-full flex-shrink-0 z-20 shadow-md overflow-hidden">
       {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'ecs' && <EcsExplorer key={selectedNode.id} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
+      {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'eks' && <EksExplorer key={selectedNode.id} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
       {!nodeData.customConfig?.canvasScalingDemo && serviceExplorerNodeId === selectedNode.id && BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId) && <ServiceBehaviorExplorer key={selectedNode.id} node={selectedNode} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
       {/* Header */}
       <div className="p-4 border-b border-slate-200 bg-white">
@@ -1031,7 +1033,7 @@ export const ServiceInspector: React.FC = () => {
           </button>
         </div>
 
-        {!nodeData.customConfig?.canvasScalingDemo && (nodeData.serviceId === 'ecs' || BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId)) && <button onClick={() => setServiceExplorerNodeId(selectedNode.id)} className="mt-3 w-full min-h-11 flex items-center justify-center gap-2 rounded-lg border border-circuit-600 bg-circuit-50 text-circuit-800 text-sm font-semibold hover:bg-circuit-100 focus-visible:outline-circuit-600">
+        {!nodeData.customConfig?.canvasScalingDemo && (['ecs', 'eks'].includes(nodeData.serviceId) || BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId)) && <button onClick={() => setServiceExplorerNodeId(selectedNode.id)} className="mt-3 w-full min-h-11 flex items-center justify-center gap-2 rounded-lg border border-circuit-600 bg-circuit-50 text-circuit-800 text-sm font-semibold hover:bg-circuit-100 focus-visible:outline-circuit-600">
           <Maximize2 size={16} aria-hidden="true" /> More information
         </button>}
         {/* Status Bar with Simulate Failure toggle */}

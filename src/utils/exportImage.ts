@@ -26,19 +26,31 @@ export async function downloadCanvasAsPng(
   const bounds = getNodesBounds(nodes);
   const viewport = getViewportForBounds(bounds, IMAGE_WIDTH, IMAGE_HEIGHT, MIN_ZOOM, MAX_ZOOM, PADDING);
 
-  const dataUrl = await toPng(viewportEl, {
-    // Omit editing handles from the cloned export without changing the live canvas.
-    filter: element => !element.classList?.contains('react-flow__handle'),
-    backgroundColor: '#ffffff',
-    width: IMAGE_WIDTH,
-    height: IMAGE_HEIGHT,
-    pixelRatio: 2,
-    style: {
-      width: `${IMAGE_WIDTH}px`,
-      height: `${IMAGE_HEIGHT}px`,
-      transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`
-    }
-  });
+  // Exports are always light (white background, dark labels), whatever the canvas theme.
+  const html = document.documentElement;
+  const darkPage = html.classList.contains('lab-dark');
+  html.classList.remove('dark', 'lab-dark');
+  const flow = viewportEl.closest('.react-flow.dark');
+  flow?.classList.remove('dark');
+  let dataUrl: string;
+  try {
+    dataUrl = await toPng(viewportEl, {
+      // Omit editing handles from the cloned export without changing the live canvas.
+      filter: element => !element.classList?.contains('react-flow__handle'),
+      backgroundColor: '#ffffff',
+      width: IMAGE_WIDTH,
+      height: IMAGE_HEIGHT,
+      pixelRatio: 2,
+      style: {
+        width: `${IMAGE_WIDTH}px`,
+        height: `${IMAGE_HEIGHT}px`,
+        transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`
+      }
+    });
+  } finally {
+    if (darkPage) html.classList.add('dark', 'lab-dark');
+    flow?.classList.add('dark');
+  }
 
   const link = document.createElement('a');
   link.href = dataUrl;

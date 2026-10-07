@@ -18,7 +18,7 @@ export function ReferenceLibrary() {
     loadTemplate(ref.id, ref); if (panel.current) panel.current.open = false;
   };
   return <details ref={panel} className="relative" onToggle={() => { if (panel.current?.open) { try { setSaved(readReferenceLibrary(localStorage)); setName(draftName || 'My architecture'); } catch (error) { setMessage(String(error)); } } }}>
-    <summary className="list-none cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 bg-white/95 shadow-sm text-xs font-semibold text-slate-800"><FolderOpen size={15} />Reference Diagrams</summary>
+    <summary className="list-none cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 bg-white/95 shadow-sm text-xs font-semibold text-slate-800 dark:bg-slate-900/95 dark:border-slate-700 dark:text-slate-200"><FolderOpen size={15} />Reference Diagrams</summary>
     <section aria-label="Reference diagram library" className="absolute top-full left-0 mt-2 w-[min(420px,85vw)] max-h-[75dvh] overflow-y-auto rounded-xl bg-white border border-slate-200 shadow-xl p-4 text-slate-900 space-y-3" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape' && panel.current) panel.current.open = false; }}>
       <div><h3 className="font-semibold">Reference diagrams</h3><p className="text-xs text-slate-500 mt-1">Start from an example or keep your own architecture.</p></div>
       <input aria-label="Search reference diagrams" className="w-full border rounded-md p-2 text-sm" placeholder="Search diagrams…" value={search} onChange={e => setSearch(e.target.value)} />

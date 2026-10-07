@@ -157,7 +157,7 @@ export const CustomConnectionEdge = memo(({
     ? '#0284C7'
     : edgeData.hasMissingReturnBlock
     ? '#DC2626'
-    : '#475569';
+    : 'var(--canvas-edge, #475569)';
   let strokeWidth = selected ? 2.5 : 1.5;
   let strokeDasharray: string | undefined = edgeData.hasMissingReturnBlock
     ? '6,4'
@@ -429,10 +429,10 @@ export const CustomConnectionEdge = memo(({
                     : effectiveStatus === 'failed' || edgeData.hasMissingReturnBlock
                     ? 'w-6 h-6 rounded-full bg-rose-600 text-white text-xs ring-2 ring-rose-300'
                     : effectiveStatus === 'pending'
-                    ? 'w-5 h-5 rounded-full bg-white border-2 border-circuit-400 text-circuit-600 text-[10px]'
+                    ? 'w-5 h-5 rounded-full bg-white border-2 border-circuit-400 text-circuit-600 text-[10px] dark:bg-slate-900 dark:text-circuit-300'
                     : effectiveStatus === 'dimmed'
                     ? 'w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-[10px]'
-                    : 'w-6 h-6 rounded-full bg-slate-900 text-white text-xs hover:bg-circuit-600'
+                    : 'w-6 h-6 rounded-full bg-slate-900 text-white text-xs hover:bg-circuit-600 dark:bg-slate-200 dark:text-slate-900'
                 }`}
               >
                 {effectiveStatus === 'failed' || edgeData.hasMissingReturnBlock ? '!' : displayStep}
@@ -451,8 +451,8 @@ export const CustomConnectionEdge = memo(({
                   : edgeData.signalType === 'outbound_response' && !edgeData.hasMissingReturnBlock
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                   : effectiveStatus === 'dimmed'
-                  ? 'bg-slate-50 text-slate-400 border-slate-200 opacity-60'
-                  : 'bg-white text-slate-700 border-slate-300 shadow-xs hover:border-slate-400'
+                  ? 'bg-slate-50 text-slate-400 border-slate-200 opacity-60 dark:bg-slate-900 dark:text-slate-500 dark:border-slate-700'
+                  : 'bg-white text-slate-700 border-slate-300 shadow-xs hover:border-slate-400 dark:bg-slate-900 dark:text-slate-200 dark:border-slate-600 dark:hover:border-slate-400'
               }`}
             >
               {edgeData.protocol || 'HTTP'}
@@ -474,8 +474,8 @@ export const CustomConnectionEdge = memo(({
 
           {/* 6. Rich Interactive Tooltip on Line Hover */}
           {isHovered && effectiveStatus !== 'dimmed' && (flowAction || flowStepNumber || edgeData.protocol) && (
-            <div className={`absolute ${labelY < 140 ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-64 p-3 rounded-xl bg-white border border-slate-200 shadow-2xl pointer-events-none text-left z-[99999] animate-in fade-in zoom-in-95 duration-150`}>
-              <div className="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-100">
+            <div className={`absolute ${labelY < 140 ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-64 p-3 rounded-xl bg-white border border-slate-200 shadow-2xl dark:bg-slate-900 dark:border-slate-700 pointer-events-none text-left z-[99999] animate-in fade-in zoom-in-95 duration-150`}>
+              <div className="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-100 dark:border-slate-700">
                 <span className="text-[10px] font-mono font-bold text-circuit-600 uppercase tracking-wider">
                   {displayStep ? `Task Flow • Step ${displayStep}` : 'Connection Line'}
                 </span>
@@ -495,13 +495,13 @@ export const CustomConnectionEdge = memo(({
               </div>
 
               {flowAction && (
-                <div className="text-xs font-bold text-slate-900 leading-snug mb-1">
+                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-snug mb-1">
                   {flowAction}
                 </div>
               )}
 
               <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 mb-1">
-                <span className="font-semibold text-slate-700">{edgeData.protocol}</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{edgeData.protocol}</span>
                 {flowLatency !== undefined && (
                   <>
                     <span>•</span>
@@ -519,13 +519,13 @@ export const CustomConnectionEdge = memo(({
               </div>
 
               {flowExplanation && (
-                <p className="text-[10px] text-slate-600 leading-relaxed border-t border-slate-100 pt-1 line-clamp-2">
+                <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-700 pt-1 line-clamp-2">
                   {flowExplanation}
                 </p>
               )}
 
               {flowStepIndex !== undefined && (
-                <div className="mt-1.5 pt-1 border-t border-slate-100 text-[9px] text-circuit-600 font-semibold flex items-center gap-1">
+                <div className="mt-1.5 pt-1 border-t border-slate-100 dark:border-slate-700 text-[9px] text-circuit-600 font-semibold flex items-center gap-1">
                   <span>Click badge to trace step</span>
                 </div>
               )}

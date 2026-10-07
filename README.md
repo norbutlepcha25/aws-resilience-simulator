@@ -91,5 +91,5 @@ add confirmed agent usernames to `excludedContributorLogins` in
 `src/utils/contributors.ts`. Human accounts remain eligible even when they use AI
 assistance. If the API is offline, rate-limited, invalid, or exceeds the ten-second
 refresh timeout, the page retains the curated fallback credits. A successful empty
-response displays no contributor cards. The contribution-history link remains
-available in either case.
+response displays no contributor cards. Contributor cards render directly on the home page; no contribution-history
+link is shown.

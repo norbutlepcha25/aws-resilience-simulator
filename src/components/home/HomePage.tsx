@@ -447,7 +447,7 @@ export function HomePage({ onStart }: { onStart: () => void }) {
         <a href={`${repository}/issues/new?title=Feedback%3A%20&body=My%20question%2C%20idea%2C%20or%20feedback%3A%0A`} target="_blank" rel="noopener noreferrer"><MessageSquare /><div><h3>Leave a comment or idea</h3><p>Start a feedback thread, or comment on an existing issue.</p></div><ArrowRight /></a>
         <a href={repository} target="_blank" rel="noopener noreferrer"><GitBranch /><div><h3>Contribute to the project</h3><p>Explore the source, documentation, and open issues.</p></div><ArrowRight /></a>
       </div></section>
-      <section className="home-section home-contributors home-reveal"><h2>People building the lab</h2><p className="home-section-lead">Credits update from GitHub when this page opens. Bot and known AI-agent accounts are excluded.</p><ul className="home-stagger">{contributors.map(c => <ContributorCard key={c.login} c={c} />)}</ul><a href={`${repository}/graphs/contributors`} target="_blank" rel="noopener noreferrer">View contribution history on GitHub</a></section>
+      <section className="home-section home-contributors home-reveal"><h2>People building the lab</h2><p className="home-section-lead">Credits update from GitHub when this page opens. Bot and known AI-agent accounts are excluded.</p><ul className="home-stagger">{contributors.map(c => <ContributorCard key={c.login} c={c} />)}</ul></section>
     </main>
     <div className="home-footer-wrap"><footer className="home-footer">
       <div className="home-footer-brand"><a href="#" className="home-brand"><Layers size={24} />Cloud Architecture Lab</a><p>Open source · MIT License</p><button onClick={onStart}>Open the lab <ArrowRight size={16} /></button></div>

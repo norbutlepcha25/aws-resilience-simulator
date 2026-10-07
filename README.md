@@ -76,3 +76,20 @@ MIT — see [LICENSE](LICENSE).
 Cloud Architecture Lab is an independent, open-source educational project. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services, Inc. or Amazon.com, Inc. Amazon Web Services, AWS, and related service names and icons are trademarks of Amazon.com, Inc. or its affiliates, used here for identification and educational purposes only. Simulated behavior is an approximation and is not official AWS documentation.
 
 The AWS service and resource icons under `src/components/serviceIcon/`, and the VPC/subnet group glyphs in `src/components/icons/AwsGroupIcons.tsx`, are AWS's own [Architecture Icons](https://aws.amazon.com/architecture/icons/), used here under AWS's asset-package terms for building architecture diagrams. They are not covered by this project's MIT license and remain AWS's assets.
+
+### Landing-page contributor credits
+
+The home page loads all pages of GitHub's public contributor list for
+`norbutlepcha25/cloud-architecture-lab` whenever the page opens. No token or server
+is required. GitHub caches contributor data, so newly attributed commits may take
+time to appear; comments and unmerged pull requests do not automatically become
+commit credits. See [GitHub's contributor endpoint](https://docs.github.com/en/rest/repos/repos#list-repository-contributors).
+
+Accounts identified as bots, known AI-agent logins, and explicit `-bot`/`-agent`
+account suffixes are filtered. GitHub cannot reliably identify every AI account;
+add confirmed agent usernames to `excludedContributorLogins` in
+`src/utils/contributors.ts`. Human accounts remain eligible even when they use AI
+assistance. If the API is offline, rate-limited, invalid, or exceeds the ten-second
+refresh timeout, the page retains the curated fallback credits. A successful empty
+response displays no contributor cards. The contribution-history link remains
+available in either case.

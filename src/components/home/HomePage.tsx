@@ -1,4 +1,5 @@
 import React from 'react';
+import { fallbackContributors, loadContributors, type Contributor } from '../../utils/contributors.ts';
 import { ArrowRight, GitBranch, MessageSquare, Bug, ShieldAlert, Play, Layers, BookOpen, Copy, Check, Terminal, Users, School, FlaskConical, XCircle, FileDown, FileUp, HardDrive, ImageDown, ExternalLink } from 'lucide-react';
 import { AwsServiceIcon } from '../icons/AwsServiceIcons.tsx';
 import { VpcGroupIcon, PublicSubnetGroupIcon, PrivateSubnetGroupIcon } from '../icons/AwsGroupIcons.tsx';
@@ -7,32 +8,17 @@ import { useTheme } from '../../utils/theme.ts';
 import { ThemeToggle } from '../layout/ThemeToggle.tsx';
 
 const repository = 'https://github.com/norbutlepcha25/cloud-architecture-lab';
-// Human authors from repository history, used until (or if) the live GitHub list cannot load.
-// Logins drive avatars; names map commit-author names onto GitHub accounts. Never list bots or AI agents.
-type Contributor = { login: string; name?: string; avatar: string; contributions?: number };
-const fallbackContributors: Contributor[] = [
-  { login: 'CS-Sensei', name: 'cs-Sensei' },
-  { login: 'norbutlepcha25' },
-  { login: 'Namgay282004', name: 'Namgay Wangchuk' },
-  { login: 'KeldenPDorji', name: 'Drac' },
-].map(c => ({ ...c, avatar: `https://github.com/${c.login}.png?size=112` }));
-const knownNames = new Map(fallbackContributors.map(c => [c.login.toLowerCase(), c.name]));
-const automatedAccount = /\[bot\]|bot$|copilot|claude|codex|gpt|agent|dependabot|renovate/i;
-
 function useContributors() {
   const [contributors, setContributors] = React.useState(fallbackContributors);
   React.useEffect(() => {
     if (typeof fetch !== 'function') return;
     const controller = new AbortController();
-    fetch(`https://api.github.com/repos/${repository.split('github.com/')[1]}/contributors?per_page=100`, { signal: controller.signal, headers: { Accept: 'application/vnd.github+json' } })
-      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((rows: Array<{ login: string; type: string; avatar_url: string; contributions: number }>) => {
-        const humans = rows.filter(r => r.type === 'User' && !automatedAccount.test(r.login))
-          .map(r => ({ login: r.login, name: knownNames.get(r.login.toLowerCase()), avatar: `${r.avatar_url}${r.avatar_url.includes('?') ? '&' : '?'}s=112`, contributions: r.contributions }));
-        if (humans.length) setContributors(humans);
-      })
-      .catch(() => { /* offline or rate-limited: keep the curated list */ });
-    return () => controller.abort();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    loadContributors(controller.signal)
+      .then(humans => { if (!controller.signal.aborted) setContributors(humans); })
+      .catch(() => { /* Offline, malformed response or rate limit: retain curated credits. */ })
+      .finally(() => window.clearTimeout(timeout));
+    return () => { controller.abort(); window.clearTimeout(timeout); };
   }, []);
   return contributors;
 }
@@ -461,7 +447,7 @@ export function HomePage({ onStart }: { onStart: () => void }) {
         <a href={`${repository}/issues/new?title=Feedback%3A%20&body=My%20question%2C%20idea%2C%20or%20feedback%3A%0A`} target="_blank" rel="noopener noreferrer"><MessageSquare /><div><h3>Leave a comment or idea</h3><p>Start a feedback thread, or comment on an existing issue.</p></div><ArrowRight /></a>
         <a href={repository} target="_blank" rel="noopener noreferrer"><GitBranch /><div><h3>Contribute to the project</h3><p>Explore the source, documentation, and open issues.</p></div><ArrowRight /></a>
       </div></section>
-      <section className="home-section home-contributors home-reveal"><h2>People building the lab</h2><ul className="home-stagger">{contributors.map(c => <ContributorCard key={c.login} c={c} />)}</ul></section>
+      <section className="home-section home-contributors home-reveal"><h2>People building the lab</h2><p className="home-section-lead">Credits update from GitHub when this page opens. Bot and known AI-agent accounts are excluded.</p><ul className="home-stagger">{contributors.map(c => <ContributorCard key={c.login} c={c} />)}</ul><a href={`${repository}/graphs/contributors`} target="_blank" rel="noopener noreferrer">View contribution history on GitHub</a></section>
     </main>
     <div className="home-footer-wrap"><footer className="home-footer">
       <div className="home-footer-brand"><a href="#" className="home-brand"><Layers size={24} />Cloud Architecture Lab</a><p>Open source · MIT License</p><button onClick={onStart}>Open the lab <ArrowRight size={16} /></button></div>

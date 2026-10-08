@@ -1,4 +1,6 @@
+import { compassHandleId } from '../../utils/compassHandles.ts';
 import { ReferenceLibrary } from '../references/ReferenceLibrary.tsx';
+import { SaveLabDiagram } from '../labs/SaveLabDiagram.tsx';
 import { CanvasLayers, canvasLayerKey } from './CanvasLayers.tsx';
 import { asgMembershipFrames } from '../../engine/layout/asgMembershipFrames.ts';
 import React, { useRef, useCallback, useState, useEffect } from 'react';
@@ -8,6 +10,7 @@ import {
   Controls,
   BackgroundVariant,
   ConnectionLineType,
+  ConnectionMode,
   Panel,
   Node
 } from '@xyflow/react';
@@ -43,7 +46,9 @@ export const ArchitectureCanvas: React.FC = () => {
     edges,
     onEdgesChange,
     onConnect,
+    onReconnect,
     selectedNode,
+    selectedEdge,
     setSelectedNodeId,
     setSelectedEdgeId,
     addServiceNode,
@@ -73,8 +78,14 @@ export const ArchitectureCanvas: React.FC = () => {
   const visibleNodes = nodes.map(node => hiddenNodeIds.has(node.id) ? { ...node, hidden: true } : node);
   const membershipFrames = asgMembershipFrames(visibleNodes);
   const displayedFrames = membershipFrames.map(node => hiddenLayers.has(canvasLayerKey(node)) ? { ...node, hidden: true } : node);
-  const visibleEdges = edges.map(edge => hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target)
-    ? { ...edge, hidden: true } : edge);
+  const visibleEdges = edges.map(edge => ({
+    ...edge,
+    selected: edge.id === selectedEdge?.id,
+    reconnectable: true,
+    sourceHandle: compassHandleId(edge.sourceHandle, 'source'),
+    targetHandle: compassHandleId(edge.targetHandle, 'target'),
+    hidden: edge.hidden || hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target),
+  }));
   useEffect(() => { setHiddenLayers(new Set()); }, [canvasRevision]);
   const selectedId = selectedNode?.id;
 
@@ -215,6 +226,10 @@ export const ArchitectureCanvas: React.FC = () => {
         onNodesChange={changes => onNodesChange(changes.filter(change => !('id' in change) || !membershipFrames.some(frame => frame.id === change.id)))}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onReconnect={onReconnect}
+        connectionMode={ConnectionMode.Loose}
+        edgesReconnectable
+        reconnectRadius={14}
         connectionLineType={ConnectionLineType.Step}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -252,6 +267,13 @@ export const ArchitectureCanvas: React.FC = () => {
         />
 
         {/* Clean Controls */}
+        {selectedEdge && (
+          <Panel position="bottom-center" className="pointer-events-none">
+            <div role="status" className="rounded-lg border border-circuit-300 bg-white/95 px-4 py-2 text-xs text-slate-700 shadow-md dark:border-slate-600 dark:bg-slate-900/95 dark:text-slate-200">
+              Drag either highlighted end onto a connection dot to move it to another side or component.
+            </div>
+          </Panel>
+        )}
         <Controls
           className="!bg-white !border !border-slate-200 !rounded-lg !shadow-md !overflow-hidden [&>button]:!bg-white [&>button]:!border-b [&>button]:!border-slate-100 [&>button]:!text-slate-600 [&>button:hover]:!bg-slate-50 dark:!bg-slate-900 dark:!border-slate-700 dark:[&>button]:!bg-slate-900 dark:[&>button]:!border-slate-800 dark:[&>button]:!text-slate-300 dark:[&>button]:!fill-slate-300 dark:[&>button:hover]:!bg-slate-800"
           showInteractive={false}
@@ -261,6 +283,7 @@ export const ArchitectureCanvas: React.FC = () => {
         {/* Canvas Task Flow Toggle */}
         <Panel position="top-left" className="m-3 flex items-center gap-2">
           <ReferenceLibrary />
+          <SaveLabDiagram key={canvasRevision} />
           {/* Quick Flow of Task Toggle */}
           <button
             onClick={toggleTaskFlow}

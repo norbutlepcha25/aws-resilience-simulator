@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { CompassHandles } from './CompassHandles.tsx';
 import { ServiceNodeData } from '../../types/index.ts';
 import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
 import { AwsServiceIcon } from '../icons/AwsServiceIcons.tsx';
@@ -38,19 +38,7 @@ export const ServiceNode = memo((props: any) => {
       {nodeData.customConfig?.asgAlarm && <span className="text-[10px] bg-amber-100 text-amber-900 px-2 rounded">{nodeData.customConfig.asgAlarm.state}</span>}
       {nodeData.customConfig?.asgRuntime && <span className="text-[10px] bg-blue-100 text-blue-900 px-2 rounded">Desired: {nodeData.customConfig.asgRuntime.desired}</span>}
       {asgInstance && <span className={`text-[10px] rounded px-2 py-0.5 mb-1 ${asgInstance.state === 'InService' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800 motion-safe:animate-pulse'}`}>{asgInstance.state}</span>}
-      {/* Target Handles (Left & Top) */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="target-left"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white dark:!border-[#0f1720] transition-colors"
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="target-top"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white dark:!border-[#0f1720] transition-colors"
-      />
+      <CompassHandles />
 
       {/* Official AWS Service Icon */}
       <div className="relative flex items-center justify-center">
@@ -93,19 +81,6 @@ export const ServiceNode = memo((props: any) => {
         )}
       </div>
 
-      {/* Source Handles (Right & Bottom) */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="source-right"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white dark:!border-[#0f1720] transition-colors"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="source-bottom"
-        className="!w-2.5 !h-2.5 !bg-slate-400 hover:!bg-circuit-600 !border-2 !border-white dark:!border-[#0f1720] transition-colors"
-      />
     </div>
   );
 });

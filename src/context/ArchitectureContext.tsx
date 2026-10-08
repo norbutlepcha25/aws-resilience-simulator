@@ -1,3 +1,4 @@
+import { isEksManagementPair } from '../engine/architecture/eksRelationships.ts';
 import { labAnnotationProtocol } from '../engine/architecture/labConnections.ts';
 import { observeAlbRequests } from '../engine/scaling/albObservation.ts';
 import { resetAsg } from '../engine/scaling/asg.ts';
@@ -63,6 +64,7 @@ interface ArchitectureContextType {
   setEdges: React.Dispatch<React.SetStateAction<Edge<ConnectionData>[]>>;
   onEdgesChange: any;
   onConnect: (connection: Connection) => void;
+  onReconnect: (edge: Edge<ConnectionData>, connection: Connection) => void;
 
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
@@ -507,7 +509,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     // security group) are visual grouping only, and the simulator skips them, which
     // would leave a traversal with no next hop.
     if (!sourceNode || !targetNode) return;
-    if (sourceNode.type === 'boundaryNode' || targetNode.type === 'boundaryNode') return;
+    if ((sourceNode.type === 'boundaryNode' || targetNode.type === 'boundaryNode') && !isEksManagementPair(sourceNode, targetNode)) return;
 
     // Ignore a duplicate connection between the same pair of services.
     if (edges.some(e => e.source === connection.source && e.target === connection.target)) {
@@ -531,7 +533,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const management = isManagementPair(sourceNode, targetNode);
     const annotationProtocol = management ? undefined : labAnnotationProtocol(activeLabReference, sourceNode, targetNode);
     const relationship = authorization ? 'authorization' : management || annotationProtocol ? 'manages' : 'request';
-    const protocols: ProtocolType[] = authorization ? ['Event'] : annotationProtocol ? [annotationProtocol] : management ? ['Event'] : connectionProtocols(sourceNode, targetNode);
+    const protocols: ProtocolType[] = authorization ? ['Event'] : annotationProtocol ? [annotationProtocol] : management ? (isEksManagementPair(sourceNode, targetNode) ? ['HTTPS'] : ['Event']) : connectionProtocols(sourceNode, targetNode);
     if (!protocols.length) { window.alert('Behavior not modeled or unsupported interaction for this pair. No request connection was created.'); return; }
     if (!protocols.includes(defaultProtocol)) defaultProtocol = protocols[0];
     const validation = checkConnection(sourceNode, targetNode, { protocol: defaultProtocol, relationship });
@@ -546,7 +548,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
       },
       data: {
         relationship,
-        label: authorization ? 'IAM authorization (not request traffic)' : annotationProtocol ? 'Lab configuration link (not request traffic)' : management ? (sourceNode.data.serviceId === 'alb' ? 'ALB request metrics' : 'Management') : undefined,
+        label: authorization ? 'IAM authorization (not request traffic)' : annotationProtocol ? 'Lab configuration link (not request traffic)' : management ? (isEksManagementPair(sourceNode, targetNode) ? 'EKS management relationship (not executed)' : sourceNode.data.serviceId === 'alb' ? 'ALB request metrics' : 'Management') : undefined,
         referenceAnnotation: !authorization && annotationProtocol ? activeLabReference?.id : undefined,
         protocol: defaultProtocol,
         transport: interactionTransport(defaultProtocol),
@@ -559,6 +561,22 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     setEdges((eds) => addEdge(newEdge as any, eds as any) as any);
   }, [nodes, edges, setEdges, activeLabReference]);
+
+  // Preserve edge identity/configuration while relocating either endpoint.
+  const onReconnect = useCallback((oldEdge: Edge<ConnectionData>, connection: Connection) => {
+    const edge = edges.find(e => e.id === oldEdge.id);
+    if (!edge || !connection.source || !connection.target || connection.source === connection.target) return;
+    const source = nodes.find(n => n.id === connection.source);
+    const target = nodes.find(n => n.id === connection.target);
+    if (!source || !target) return;
+    const samePair = edge.source === source.id && edge.target === target.id;
+    if (!samePair) {
+      if (edges.some(e => e.id !== edge.id && e.source === source.id && e.target === target.id)) return;
+      const result = checkConnection(source, target, { ...edge.data, referenceAnnotation: undefined });
+      if (result.status !== 'valid') { window.alert(result.reason); return; }
+    }
+    setEdges(previous => previous.map(e => e.id === edge.id ? { ...e, ...connection } : e));
+  }, [edges, nodes, setEdges]);
 
   // Add a new node to canvas
   const addServiceNode = useCallback((
@@ -1408,6 +1426,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         setEdges,
         onEdgesChange,
         onConnect,
+        onReconnect,
 
         appMode,
         setAppMode,

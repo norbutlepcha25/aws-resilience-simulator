@@ -14,4 +14,7 @@ import reference10 from "./references/11-ec2-auto-scaling-failure-recovery.json"
 import reference11 from "./references/12-nacl-vs-security-group.json" with { type: 'json' };
 import reference12 from "./references/13-thumbnail-generator.json" with { type: 'json' };
 import reference13 from "./references/14-ecs-architecture-high-performance-image-processing.json" with { type: 'json' };
-export const REFERENCE_ARCHITECTURES = [reference0, reference1, reference2, reference3, reference4, reference5, reference6, reference7, reference8, reference9, reference10, reference11, reference12, reference13] as ReferenceArchitecture[];
+import reference14 from "./references/15-eks-architecture.json" with { type: 'json' };
+import reference15 from "./references/16-eks-multi-cluster-architecture.json" with { type: 'json' };
+import reference16 from "./references/17-eks-managed-control-plane-nlb.json" with { type: 'json' };
+export const REFERENCE_ARCHITECTURES = [reference0, reference1, reference2, reference3, reference4, reference5, reference6, reference7, reference8, reference9, reference10, reference11, reference12, reference13, reference14, reference15, reference16] as ReferenceArchitecture[];

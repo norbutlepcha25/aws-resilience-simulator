@@ -46,7 +46,8 @@ missing-ephemeral-return-rule condition that reference diagram is about, not for
 all.
 
 **Connect two services:** every node has small connector dots on its edges — drag from a
-**source** dot (right or bottom edge) to a **target** dot (left or top edge) on another node.
+dot to any dot on another node. Connectable components have exactly eight dots at the
+compass directions; each dot supports both incoming and outgoing connections.
 You can't connect a node to itself, connect directly to a VPC/subnet/AZ/security-group container,
 or create a duplicate connection. A default protocol is guessed from the target (e.g. `SQL` into
 RDS, `Message` into SQS/SNS, `DNS` from Route 53, otherwise `HTTP`) — you can change it afterward.
@@ -68,6 +69,17 @@ individual task identities, only an aggregate count; that's also the real behavi
 group, which routes to whichever registered tasks are healthy, not one fixed task. It updates the
 moment you change desired/running task counts or health, so you can watch it react as you edit.
 Click a service's name to jump straight to its network details.
+
+**Move an existing connection on the canvas:** hover over or select the line to reveal
+the two four-direction arrow controls. Hover near a compass dot to reveal the same move arrow. Drag either control onto a connection dot on any
+side or corner of a component. Each component has eight shared compass dots: N, NE, E, SE, S, SW, W and NW. Any dot can send or receive a connection. No inspector is required. Alternatively, choose **Source side** and **Target side** in the right-hand
+Connection Inspector (all eight compass directions). Moving to another side of the same
+node preserves the edge ID, protocol, label, step number and other settings. Moving to
+a different resource checks the existing interaction; unsupported connections and
+self-loops are rejected. Dropping on empty space keeps the original connection.
+These controls apply to loaded labs and references as well as new diagrams. Export
+saves the chosen handles in JSON; repository source files are updated through the
+normal reference/lab export workflow.
 
 ## 4. Understanding connection lines
 

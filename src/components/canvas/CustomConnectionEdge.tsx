@@ -1,4 +1,5 @@
 import React, { memo, useState } from 'react';
+import { MoveGlyph } from './MoveGlyph.tsx';
 import { EdgeProps, getBezierPath, getStraightPath, getSmoothStepPath, EdgeLabelRenderer, BaseEdge } from '@xyflow/react';
 import { ConnectionData, FlowStatus } from '../../types/index.ts';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
@@ -275,6 +276,16 @@ export const CustomConnectionEdge = memo(({
       />
 
       {/* 3. Core Task Flow Line */}
+      {/* Native reconnect anchors remain the hit targets; glyphs never intercept dragging. */}
+      {[
+        { x: sourceX, y: sourceY, position: sourcePosition },
+        { x: targetX, y: targetY, position: targetPosition },
+      ].map((end, index) => {
+        const x = end.x + (end.position === 'left' ? -14 : end.position === 'right' ? 14 : 0);
+        const y = end.y + (end.position === 'top' ? -14 : end.position === 'bottom' ? 14 : 0);
+        return <svg key={index} x={x - 12} y={y - 12} width={24} height={24}
+          viewBox="0 0 24 24" className="connection-move-glyph" aria-hidden="true"><MoveGlyph /></svg>;
+      })}
       <BaseEdge
         path={edgePath}
         markerEnd={markerEnd}

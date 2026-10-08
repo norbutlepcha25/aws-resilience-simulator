@@ -1,5 +1,15 @@
 import type { ReferenceArchitecture } from '../../data/referenceTypes.ts';
 export const REFERENCE_LIBRARY_KEY = 'aws-architecture-lab.references.v1';
+/** A removed request entry point must not prevent saving the edited diagram.
+ * Keep request settings, but leave entry-point selection to the user on reload. */
+export function referenceSnapshot(ref: ReferenceArchitecture): ReferenceArchitecture {
+  const scenario = ref.scenario && {
+    ...ref.scenario,
+    startNodeId: ref.nodes.some(node => node.id === ref.scenario!.startNodeId)
+      ? ref.scenario.startNodeId : '',
+  };
+  return parseReference(JSON.stringify({ ...ref, scenario }));
+}
 export function parseReference(text: string): ReferenceArchitecture {
   if (text.length > 20_000_000) throw new Error('Reference exceeds the 20 MB limit.');
   const ref = JSON.parse(text);

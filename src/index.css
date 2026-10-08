@@ -80,6 +80,59 @@
   pointer-events: none;
 }
 
+/* Use React Flow's native reconnect anchors so the visible controls themselves
+   start a reconnect drag. Keep the full hit area available even before hover. */
+/* A roomy transparent target reveals a four-direction glyph when approached. */
+.compass-handle.react-flow__handle {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  cursor: move;
+}
+.compass-handle::before {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: #0284c7;
+  border: 2px solid white;
+  pointer-events: none;
+}
+.compass-handle svg {
+  position: absolute;
+  inset: 2px;
+  width: 24px;
+  height: 24px;
+  color: #0284c7;
+  opacity: 0;
+  pointer-events: none;
+}
+.compass-handle:hover::before,
+.compass-handle.connectingfrom::before,
+.compass-handle.connectingto::before { opacity: 0; }
+.compass-handle:hover svg,
+.compass-handle.connectingfrom svg,
+.compass-handle.connectingto svg { opacity: 1; }
+.lab-canvas .react-flow__edgeupdater {
+  fill: transparent;
+  stroke: transparent;
+  cursor: move;
+}
+.connection-move-glyph {
+  color: #0284c7;
+  opacity: 0;
+  pointer-events: none;
+}
+.lab-canvas .react-flow__edge:hover .connection-move-glyph,
+.lab-canvas .react-flow__edge.selected .connection-move-glyph,
+.lab-canvas .react-flow__edge:focus-visible .connection-move-glyph { opacity: 1; }
+html.lab-dark .compass-handle svg,
+html.lab-dark .connection-move-glyph { color: #38bdf8; }
+html.lab-dark .compass-handle::before { border-color: #0f172a; }
+
+
 
 /* ECS educational demo: motion only follows an explicit user action. */
 @keyframes ecs-demo-arrive {

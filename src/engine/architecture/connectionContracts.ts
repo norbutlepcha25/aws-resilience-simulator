@@ -1,3 +1,4 @@
+import { isEksManagementPair } from './eksRelationships.ts';
 import type { Node } from '@xyflow/react';
 import type { ConnectionData, ProtocolType } from '../../types/index.ts';
 import { relationshipKind } from './relationships.ts';
@@ -26,6 +27,7 @@ export function isAuthorizationPair(source?: Node<any>, target?: Node<any>): boo
 }
 export function isManagementPair(source?: Node<any>, target?: Node<any>): boolean {
   if (!source || !target) return false;
+  if (isEksManagementPair(source, target)) return true;
   const from = source.data.serviceId, to = target.data.serviceId;
   return (['auto_scaling', 'ec2_auto_scaling'].includes(from) && to === 'ec2')
     || (from === 'cloudwatch' && to === 'ec2_auto_scaling')

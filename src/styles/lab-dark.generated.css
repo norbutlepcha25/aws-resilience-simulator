@@ -62,7 +62,6 @@
 :where(html.lab-dark) .border-slate-200\/80 { border-color: rgb(30 41 59 / 0.8); }
 :where(html.lab-dark) .border-slate-200\/90 { border-color: rgb(30 41 59 / 0.9); }
 :where(html.lab-dark) .border-slate-300 { border-color: rgb(51 65 85); }
-:where(html.lab-dark) .border-white { border-color: rgb(30 41 59); }
 :where(html.lab-dark) .border-white\/10 { border-color: rgb(30 41 59 / 0.1); }
 :where(html.lab-dark) .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(30 41 59); }
 :where(html.lab-dark) .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(30 41 59); }

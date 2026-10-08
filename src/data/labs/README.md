@@ -10,12 +10,15 @@ of this folder because it isn't architecture data a student edits on the canvas.
 
 ## Edit or add a lab reference
 
-1. In the app, open **Labs**, pick a lab, and click the small download icon next to any reference
-   card to get its current JSON.
-2. Edit the file (or build a variant on the canvas and download an existing reference as a
-   starting point). Keep its `id` unique across every file in this folder.
-3. Place the file in this folder (`src/data/labs/`), named `NN-<id>.json` (two-digit lab number
-   prefix keeps files grouped in listings; the prefix itself isn't read by anything).
+1. In the app, open **Labs** and load a lab diagram onto the canvas.
+2. Edit its layout, connections and service configuration. Click **Save lab diagram**
+   at the top-left of the canvas to export the edited diagram. The button appears only
+   while a lab diagram is loaded. The export preserves its ID, title, description,
+   expected outcome, scope, configuration checks and authorization data.
+3. Replace the matching JSON file in `src/data/labs/` with the exported JSON (the save
+   dialog suggests its original `NN-<id>.json` filename). Do not paste workspace draft
+   JSON here, or add a second file with the same ID. A missing request start node is
+   cleared on export and reported; choose an entry point before simulation.
 4. If this is a *new* lab reference (not editing an existing one), add its `id` to the matching
    lab's `referenceIds` array in `../courseLabsMeta.json`.
 5. Restart `npm run dev`, run `npm run build`, or run `npm run labs:sync` if the dev server is

@@ -36,7 +36,9 @@ export async function downloadCanvasAsPng(
   try {
     dataUrl = await toPng(viewportEl, {
       // Omit editing handles from the cloned export without changing the live canvas.
-      filter: element => !element.classList?.contains('react-flow__handle'),
+      filter: element => !element.classList?.contains('react-flow__handle')
+        && !element.classList?.contains('react-flow__edgeupdater')
+        && !element.classList?.contains('connection-move-glyph'),
       backgroundColor: '#ffffff',
       width: IMAGE_WIDTH,
       height: IMAGE_HEIGHT,

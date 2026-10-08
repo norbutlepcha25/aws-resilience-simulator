@@ -1,3 +1,6 @@
+import { COMPASS_POINTS, compassHandleId } from '../../utils/compassHandles.ts';
+import { eksComponent } from '../../data/eksComponents.ts';
+import { EksComponentPanel } from './EksComponentPanel.tsx';
 import { AsgPanel } from './AsgPanel.tsx';
 import { checkConnection, connectionProtocols, connectionOperations } from '../../engine/architecture/connectionContracts.ts';
 import { ManagedServicePanel } from './ManagedServicePanel.tsx';
@@ -67,6 +70,7 @@ export const ServiceInspector: React.FC = () => {
     setSelectedEdgeId,
     updateNodeData,
     updateEdgeData,
+    onReconnect,
     updateNodeDimensions,
     bringToFront,
     sendToBack,
@@ -101,6 +105,14 @@ export const ServiceInspector: React.FC = () => {
     const sourceNode = nodes.find(n => n.id === selectedEdge.source);
     const targetNode = nodes.find(n => n.id === selectedEdge.target);
     const edgeData = selectedEdge.data || { protocol: 'HTTP', interactionType: 'synchronous', timeoutMs: 2500 };
+    const endpointSide = (end: 'source' | 'target') => {
+      return <label className="block text-xs font-semibold text-slate-700">{end === 'source' ? 'Source side' : 'Target side'}
+        <select aria-label={end === 'source' ? 'Source side' : 'Target side'} className="block border rounded p-2 w-full mt-1" value={compassHandleId(selectedEdge[`${end}Handle`], end)}
+          onChange={e => onReconnect(selectedEdge, { source: selectedEdge.source, target: selectedEdge.target, sourceHandle: selectedEdge.sourceHandle ?? null, targetHandle: selectedEdge.targetHandle ?? null, [`${end}Handle`]: e.target.value })}>
+          {COMPASS_POINTS.map(point => <option key={point.id} value={point.id}>{point.label}</option>)}
+        </select>
+      </label>;
+    };
 
     return (
       <aside className="w-80 bg-white border-l border-slate-200 flex flex-col h-full flex-shrink-0 z-20 shadow-md">
@@ -251,6 +263,8 @@ export const ServiceInspector: React.FC = () => {
 
           <p className="text-xs text-amber-700" role="status">{checkConnection(sourceNode, targetNode, selectedEdge.data).reason}</p>
           <p className="text-xs text-slate-500">Transport: {['HTTP', 'HTTPS', 'TCP'].includes(edgeData.protocol) ? edgeData.protocol : edgeData.protocol === 'DNS' ? 'UDP' : ['SQL', 'gRPC'].includes(edgeData.protocol) ? 'TCP' : 'HTTPS'}</p>
+          <div className="grid grid-cols-2 gap-2">{endpointSide('source')}{endpointSide('target')}</div>
+          <p className="text-xs text-slate-500">Drag either end of the selected edge onto another connection dot, or choose its side here. Export saves the changes.</p>
           <label className="block text-xs">API operation
             <select className="block border rounded p-2 w-full" value={selectedEdge.data?.action ?? ''} onChange={e => updateEdgeData(selectedEdge.id, { action: e.target.value || undefined })}>
               <option value="">Default service operation</option>
@@ -268,7 +282,7 @@ export const ServiceInspector: React.FC = () => {
               <option value="route-association">Route association</option>
               <option value="target-registration">Target registration</option>
             </select>
-            <span className="block font-normal text-slate-500 mt-1">Structural relationships do not carry requests. Configure ASG members and alarm associations in the ASG Config panel; drawing a management line alone does not configure a scaling policy.</span>
+            <span className="block font-normal text-slate-500 mt-1">Structural relationships do not carry requests. Management lines illustrate relationships; they do not execute Kubernetes operations or configure scaling policies.</span>
           </label>
 
           {/* Coupling Mode */}
@@ -317,6 +331,7 @@ export const ServiceInspector: React.FC = () => {
 
   // Handle Node Inspection
   if (!selectedNode) return null;
+  if (eksComponent(selectedNode)) return <EksComponentPanel node={selectedNode} onLabel={label => updateNodeData(selectedNode.id, { label })} onClose={() => setSelectedNodeId(null)} />;
 
   // Handle Boundary Node Inspection (VPC, Subnet, AZ, Security Group, Region, etc.)
   if (selectedNode.type === 'boundaryNode' || !selectedNode.data?.serviceId) {

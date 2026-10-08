@@ -1,0 +1,937 @@
+{
+  "id": "eks-managed-control-plane-nlb",
+  "name": "EKS architecture \u2014 managed NLB & multi-AZ control plane",
+  "category": "Containers & Kubernetes",
+  "difficulty": "Advanced",
+  "description": "Separate reference based on the supplied NLB image: ONE EKS cluster, one Kubernetes API endpoint, AWS-managed NLB and representative API server replicas across three AZs; one shared etcd cluster with three illustrated members. Native private access and API-to-kubelet connectivity are represented by EKS-managed cross-account ENIs in two customer private subnets. Dashed/curved management lines illustrate logical paths, not fixed ENI-to-replica wiring or executed Kubernetes calls. API/etcd counts and topology are illustrative: AWS runs at least two API servers and at least three etcd instances; no dedicated API/etcd pair per AZ is implied. The endpoint is an address; the managed NLB is behind public access, not a shared multi-cluster endpoint. Native private access is not customer PrivateLink. The kubelet and kube-proxy boxes are worker-process descriptions, not independent AWS services. The extra workload Service snapshot provides the existing Ready-endpoint request test; API authentication, RBAC, ENI routing, scheduler/controllers, etcd consensus, target health and node/process failure propagation are not simulated. No secure tunnel protocol is assumed from the conceptual image.",
+  "learningOutcome": "Separate multi-AZ replication within one cluster from multiple independent clusters. Understand public endpoint \u2192 managed NLB \u2192 kube-apiserver versus private API connectivity through EKS-managed ENIs, and API server \u2192 kubelet logs/exec. Test the workload Service independently by changing its Ready count or selector. Sources: https://docs.aws.amazon.com/eks/latest/best-practices/control-plane.html ; https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html ; https://docs.aws.amazon.com/eks/latest/userguide/eks-architecture.html",
+  "scenario": {
+    "id": "ha-internal-app",
+    "name": "Internal Service readiness (not Kubernetes API)",
+    "startNodeId": "ha-workload",
+    "method": "GET",
+    "path": "/",
+    "trafficLevel": "normal"
+  },
+  "nodes": [
+    {
+      "id": "ha-region",
+      "type": "boundaryNode",
+      "position": {
+        "x": 0,
+        "y": 190
+      },
+      "style": {
+        "width": 1500,
+        "height": 1460
+      },
+      "data": {
+        "label": "AWS Region \u00b7 us-east-1 \u00b7 ONE EKS cluster",
+        "boundaryType": "region",
+        "width": 1500,
+        "height": 1460
+      }
+    },
+    {
+      "id": "ha-control",
+      "type": "boundaryNode",
+      "position": {
+        "x": 40,
+        "y": 245
+      },
+      "style": {
+        "width": 1420,
+        "height": 655
+      },
+      "data": {
+        "label": "AWS-managed control-plane VPC \u00b7 logical internals, not customer-editable",
+        "boundaryType": "auth",
+        "width": 1420,
+        "height": 655,
+        "visualContainerId": "ha-region",
+        "eksComponent": "control-plane",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-admin",
+      "type": "serviceNode",
+      "position": {
+        "x": 675,
+        "y": 0
+      },
+      "data": {
+        "serviceId": "user",
+        "label": "kubectl / Admin CLI",
+        "category": "Client / Ingress",
+        "health": "healthy",
+        "subnet": "global",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {}
+      }
+    },
+    {
+      "id": "ha-endpoint",
+      "type": "serviceNode",
+      "position": {
+        "x": 675,
+        "y": 305
+      },
+      "data": {
+        "serviceId": "eks",
+        "label": "Cluster Kubernetes API server endpoint",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "global",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "referenceOnly": true,
+          "eks": {
+            "kind": "control-plane",
+            "clusterName": "eks-managed-ha",
+            "controlPlaneAvailable": true
+          },
+          "endpointPublicAccess": true,
+          "endpointPrivateAccess": true,
+          "publicAccessCidrs": [
+            "203.0.113.10/32"
+          ]
+        },
+        "visualContainerId": "ha-control",
+        "eksComponent": "api-endpoint",
+        "eksClusterName": "eks-managed-ha",
+        "notes": "One DNS endpoint for the cluster; public access and native private access paths"
+      }
+    },
+    {
+      "id": "ha-nlb",
+      "type": "boundaryNode",
+      "position": {
+        "x": 600,
+        "y": 465
+      },
+      "style": {
+        "width": 300,
+        "height": 85
+      },
+      "data": {
+        "label": "AWS-managed NLB \u00b7 public API access",
+        "boundaryType": "auth",
+        "width": 300,
+        "height": 85,
+        "visualContainerId": "ha-control",
+        "eksComponent": "managed-nlb",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-az-A",
+      "type": "boundaryNode",
+      "position": {
+        "x": 70,
+        "y": 605
+      },
+      "style": {
+        "width": 400,
+        "height": 245
+      },
+      "data": {
+        "label": "Availability Zone A \u00b7 representative control-plane placement",
+        "boundaryType": "az",
+        "width": 400,
+        "height": 245,
+        "visualContainerId": "ha-control"
+      }
+    },
+    {
+      "id": "ha-api-A",
+      "type": "boundaryNode",
+      "position": {
+        "x": 95,
+        "y": 660
+      },
+      "style": {
+        "width": 195,
+        "height": 95
+      },
+      "data": {
+        "label": "kube-apiserver \u00b7 representative replica",
+        "boundaryType": "auth",
+        "width": 195,
+        "height": 95,
+        "visualContainerId": "ha-az-A",
+        "eksComponent": "api-server",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-etcd-A",
+      "type": "boundaryNode",
+      "position": {
+        "x": 305,
+        "y": 660
+      },
+      "style": {
+        "width": 145,
+        "height": 95
+      },
+      "data": {
+        "label": "etcd \u00b7 member 1",
+        "boundaryType": "auth",
+        "width": 145,
+        "height": 95,
+        "visualContainerId": "ha-az-A",
+        "eksComponent": "etcd",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-az-B",
+      "type": "boundaryNode",
+      "position": {
+        "x": 550,
+        "y": 605
+      },
+      "style": {
+        "width": 400,
+        "height": 245
+      },
+      "data": {
+        "label": "Availability Zone B \u00b7 representative control-plane placement",
+        "boundaryType": "az",
+        "width": 400,
+        "height": 245,
+        "visualContainerId": "ha-control"
+      }
+    },
+    {
+      "id": "ha-api-B",
+      "type": "boundaryNode",
+      "position": {
+        "x": 575,
+        "y": 660
+      },
+      "style": {
+        "width": 195,
+        "height": 95
+      },
+      "data": {
+        "label": "kube-apiserver \u00b7 representative replica",
+        "boundaryType": "auth",
+        "width": 195,
+        "height": 95,
+        "visualContainerId": "ha-az-B",
+        "eksComponent": "api-server",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-etcd-B",
+      "type": "boundaryNode",
+      "position": {
+        "x": 785,
+        "y": 660
+      },
+      "style": {
+        "width": 145,
+        "height": 95
+      },
+      "data": {
+        "label": "etcd \u00b7 member 2",
+        "boundaryType": "auth",
+        "width": 145,
+        "height": 95,
+        "visualContainerId": "ha-az-B",
+        "eksComponent": "etcd",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-az-C",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1030,
+        "y": 605
+      },
+      "style": {
+        "width": 400,
+        "height": 245
+      },
+      "data": {
+        "label": "Availability Zone C \u00b7 representative control-plane placement",
+        "boundaryType": "az",
+        "width": 400,
+        "height": 245,
+        "visualContainerId": "ha-control"
+      }
+    },
+    {
+      "id": "ha-api-C",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1055,
+        "y": 660
+      },
+      "style": {
+        "width": 195,
+        "height": 95
+      },
+      "data": {
+        "label": "kube-apiserver \u00b7 representative replica",
+        "boundaryType": "auth",
+        "width": 195,
+        "height": 95,
+        "visualContainerId": "ha-az-C",
+        "eksComponent": "api-server",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-etcd-C",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1265,
+        "y": 660
+      },
+      "style": {
+        "width": 145,
+        "height": 95
+      },
+      "data": {
+        "label": "etcd \u00b7 member 3",
+        "boundaryType": "auth",
+        "width": 145,
+        "height": 95,
+        "visualContainerId": "ha-az-C",
+        "eksComponent": "etcd",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-vpc",
+      "type": "boundaryNode",
+      "position": {
+        "x": 40,
+        "y": 945
+      },
+      "style": {
+        "width": 1420,
+        "height": 650
+      },
+      "data": {
+        "label": "Customer VPC data plane \u00b7 10.72.0.0/16",
+        "boundaryType": "vpc",
+        "width": 1420,
+        "height": 650,
+        "visualContainerId": "ha-region",
+        "cidr": "10.72.0.0/16"
+      }
+    },
+    {
+      "id": "ha-subnet-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 70,
+        "y": 1005
+      },
+      "style": {
+        "width": 650,
+        "height": 510
+      },
+      "data": {
+        "label": "Private subnet \u00b7 AZ-A \u00b7 10.72.1.0/24",
+        "boundaryType": "private_subnet",
+        "width": 650,
+        "height": 510,
+        "visualContainerId": "ha-vpc",
+        "cidr": "10.72.1.0/24"
+      }
+    },
+    {
+      "id": "ha-worker-a",
+      "type": "serviceNode",
+      "position": {
+        "x": 140,
+        "y": 1065
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "Worker node A \u00b7 kubelet + kube-proxy",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "private",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "instanceType": "t3.medium",
+          "referenceOnly": true,
+          "eksNode": {
+            "clusterName": "eks-managed-ha",
+            "observedPodCount": 2
+          }
+        },
+        "visualContainerId": "ha-subnet-a"
+      }
+    },
+    {
+      "id": "ha-eni-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 440,
+        "y": 1070
+      },
+      "style": {
+        "width": 240,
+        "height": 105
+      },
+      "data": {
+        "label": "EKS cross-account ENI \u00b7 managed interface",
+        "boundaryType": "auth",
+        "width": 240,
+        "height": 105,
+        "visualContainerId": "ha-subnet-a",
+        "eksComponent": "cross-account-eni",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-kubelet-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 100,
+        "y": 1245
+      },
+      "style": {
+        "width": 285,
+        "height": 90
+      },
+      "data": {
+        "label": "kubelet \u00b7 watches Pod state, starts containers",
+        "boundaryType": "auth",
+        "width": 285,
+        "height": 90,
+        "visualContainerId": "ha-subnet-a",
+        "eksComponent": "kubelet",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-proxy-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 405,
+        "y": 1245
+      },
+      "style": {
+        "width": 285,
+        "height": 90
+      },
+      "data": {
+        "label": "kube-proxy \u00b7 Service forwarding rules",
+        "boundaryType": "auth",
+        "width": 285,
+        "height": 90,
+        "visualContainerId": "ha-subnet-a",
+        "eksComponent": "kube-proxy",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-subnet-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 790,
+        "y": 1005
+      },
+      "style": {
+        "width": 650,
+        "height": 510
+      },
+      "data": {
+        "label": "Private subnet \u00b7 AZ-B \u00b7 10.72.2.0/24",
+        "boundaryType": "private_subnet",
+        "width": 650,
+        "height": 510,
+        "visualContainerId": "ha-vpc",
+        "cidr": "10.72.2.0/24"
+      }
+    },
+    {
+      "id": "ha-worker-b",
+      "type": "serviceNode",
+      "position": {
+        "x": 860,
+        "y": 1065
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "Worker node B \u00b7 kubelet + kube-proxy",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "private",
+        "az": "AZ-B",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "instanceType": "t3.medium",
+          "referenceOnly": true,
+          "eksNode": {
+            "clusterName": "eks-managed-ha",
+            "observedPodCount": 1
+          }
+        },
+        "visualContainerId": "ha-subnet-b"
+      }
+    },
+    {
+      "id": "ha-eni-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1160,
+        "y": 1070
+      },
+      "style": {
+        "width": 240,
+        "height": 105
+      },
+      "data": {
+        "label": "EKS cross-account ENI \u00b7 managed interface",
+        "boundaryType": "auth",
+        "width": 240,
+        "height": 105,
+        "visualContainerId": "ha-subnet-b",
+        "eksComponent": "cross-account-eni",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-kubelet-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 820,
+        "y": 1245
+      },
+      "style": {
+        "width": 285,
+        "height": 90
+      },
+      "data": {
+        "label": "kubelet \u00b7 watches Pod state, starts containers",
+        "boundaryType": "auth",
+        "width": 285,
+        "height": 90,
+        "visualContainerId": "ha-subnet-b",
+        "eksComponent": "kubelet",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-proxy-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1125,
+        "y": 1245
+      },
+      "style": {
+        "width": 285,
+        "height": 90
+      },
+      "data": {
+        "label": "kube-proxy \u00b7 Service forwarding rules",
+        "boundaryType": "auth",
+        "width": 285,
+        "height": 90,
+        "visualContainerId": "ha-subnet-b",
+        "eksComponent": "kube-proxy",
+        "eksClusterName": "eks-managed-ha"
+      }
+    },
+    {
+      "id": "ha-workload",
+      "type": "serviceNode",
+      "position": {
+        "x": 335,
+        "y": 1380
+      },
+      "data": {
+        "serviceId": "eks",
+        "label": "Internal workload Service \u00b7 3 Ready endpoints",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "private",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "eks": {
+            "kind": "workload",
+            "clusterName": "eks-managed-ha",
+            "namespace": "default",
+            "workloadName": "example-app",
+            "compute": "EC2",
+            "desiredReplicas": 3,
+            "runningPods": 3,
+            "readyPods": 3,
+            "serviceSelector": "app",
+            "podLabel": "app",
+            "serviceType": "ClusterIP",
+            "servicePort": 80,
+            "containerPort": 8080,
+            "nodeCount": 2,
+            "controlPlaneAvailable": true,
+            "hpaEnabled": false,
+            "image": "example/app:1.0"
+          }
+        },
+        "visualContainerId": "ha-subnet-a"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "ha-admin-ha-endpoint",
+      "source": "ha-admin",
+      "target": "ha-endpoint",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "HTTPS \u00b7 kubectl management \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-endpoint-ha-nlb",
+      "source": "ha-endpoint",
+      "target": "ha-nlb",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Public access \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-nlb-ha-api-A",
+      "source": "ha-nlb",
+      "target": "ha-api-A",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Balance API server replicas \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-api-A-ha-etcd-A",
+      "source": "ha-api-A",
+      "target": "ha-etcd-A",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Persist API state \u00b7 shared etcd cluster, not a dedicated pair \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-nlb-ha-api-B",
+      "source": "ha-nlb",
+      "target": "ha-api-B",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Balance API server replicas \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-api-B-ha-etcd-B",
+      "source": "ha-api-B",
+      "target": "ha-etcd-B",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Persist API state \u00b7 shared etcd cluster, not a dedicated pair \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-nlb-ha-api-C",
+      "source": "ha-nlb",
+      "target": "ha-api-C",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Balance API server replicas \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-api-C-ha-etcd-C",
+      "source": "ha-api-C",
+      "target": "ha-etcd-C",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Persist API state \u00b7 shared etcd cluster, not a dedicated pair \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-worker-a-ha-eni-a",
+      "source": "ha-worker-a",
+      "target": "ha-eni-a",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Private API access via EKS ENI \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-a-ha-api-A",
+      "source": "ha-eni-a",
+      "target": "ha-api-A",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Redundant private API path \u00b7 logical, not fixed target wiring \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-a-ha-api-B",
+      "source": "ha-eni-a",
+      "target": "ha-api-B",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Redundant private API path \u00b7 logical, not fixed target wiring \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-a-ha-api-C",
+      "source": "ha-eni-a",
+      "target": "ha-api-C",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Redundant private API path \u00b7 logical, not fixed target wiring \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-api-A-ha-eni-a",
+      "source": "ha-api-A",
+      "target": "ha-eni-a",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "API server \u2192 data plane \u00b7 logs / exec \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-a-ha-worker-a",
+      "source": "ha-eni-a",
+      "target": "ha-worker-a",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Reach kubelet \u00b7 logs / exec \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-worker-b-ha-eni-b",
+      "source": "ha-worker-b",
+      "target": "ha-eni-b",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Private API access via EKS ENI \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-b-ha-api-A",
+      "source": "ha-eni-b",
+      "target": "ha-api-A",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Redundant private API path \u00b7 logical, not fixed target wiring \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-b-ha-api-B",
+      "source": "ha-eni-b",
+      "target": "ha-api-B",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Redundant private API path \u00b7 logical, not fixed target wiring \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-b-ha-api-C",
+      "source": "ha-eni-b",
+      "target": "ha-api-C",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Redundant private API path \u00b7 logical, not fixed target wiring \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-api-B-ha-eni-b",
+      "source": "ha-api-B",
+      "target": "ha-eni-b",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "API server \u2192 data plane \u00b7 logs / exec \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "ha-eni-b-ha-worker-b",
+      "source": "ha-eni-b",
+      "target": "ha-worker-b",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Reach kubelet \u00b7 logs / exec \u00b7 illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    }
+  ]
+}

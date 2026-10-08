@@ -1,0 +1,798 @@
+{
+  "id": "eks-architecture",
+  "name": "EKS architecture",
+  "category": "Containers & Kubernetes",
+  "difficulty": "Intermediate",
+  "description": "EKS control-plane and customer-data-plane architecture based on the supplied diagram. Management arrows are non-traversable illustrations, not application requests. Two EC2 workers in private subnets host three illustrated Ready pods. Start Send Request at Application Service to exercise the bounded EKS workload snapshot. Select More information to edit readiness, selectors and desired replicas. API operations, endpoint reachability, IAM access entries/RBAC, etcd consensus, scheduling, reconciliation, node-to-pod failure propagation and image pulling are NOT simulated. Control-plane boxes represent distributed logical components, not one server each. No ALB/NLB is implied; ClusterIP is internal. The Kubernetes API endpoint is drawn inside the regional managed control-plane group as its access interface, not as an independent global service. Communication arrows show the API server as the hub. The endpoint is its access address, not a worker-management component. Controllers and scheduler watch/update API objects; etcd persists state. Kubelets watch assigned pods and report status via the private endpoint; API server-to-kubelet links illustrate logs, attach and port-forward, not pushing pod scheduling commands.",
+  "learningOutcome": "Separate Kubernetes management from application traffic and AWS-managed control plane from customer VPC compute. Verify that desired/running counts do not prove readiness; zero Ready endpoints or a selector mismatch fails. Existing Ready workload paths may survive API unavailability, while new desired state needs reconciliation. Illustrated node placements are snapshots and will not change automatically. Sources: https://docs.aws.amazon.com/eks/latest/userguide/eks-architecture.html ; https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html ; https://kubernetes.io/docs/concepts/services-networking/service/",
+  "scenario": {
+    "id": "eks-ready-service",
+    "name": "Internal application Service readiness",
+    "startNodeId": "eks-workload",
+    "method": "GET",
+    "path": "/",
+    "trafficLevel": "normal"
+  },
+ "nodes": [
+    {
+      "id": "eks-region",
+      "type": "boundaryNode",
+      "position": {
+        "x": 10.370628720466584,
+        "y": 283.2715618799223
+      },
+      "style": {
+        "width": 1448,
+        "height": 1124
+      },
+      "data": {
+        "label": "AWS Region · us-east-1",
+        "boundaryType": "region",
+        "width": 1448,
+        "height": 1124
+      },
+      "zIndex": -4,
+      "measured": {
+        "width": 1448,
+        "height": 1124
+      },
+      "selected": false,
+      "dragging": false,
+      "width": 1448,
+      "height": 1124,
+      "resizing": false
+    },
+    {
+      "id": "eks-control",
+      "type": "boundaryNode",
+      "position": {
+        "x": 154.0769159251325,
+        "y": 318.0862475196889
+      },
+      "style": {
+        "width": 972,
+        "height": 438
+      },
+      "data": {
+        "label": "Amazon EKS managed control plane · AWS-managed, outside customer VPC",
+        "boundaryType": "auth",
+        "width": 972,
+        "height": 438,
+        "visualContainerId": "eks-region",
+        "eksComponent": "control-plane",
+        "eksClusterName": "eks-architecture"
+      },
+      "zIndex": -3,
+      "measured": {
+        "width": 972,
+        "height": 438
+      },
+      "selected": false,
+      "width": 972,
+      "height": 438,
+      "resizing": false,
+      "dragging": false
+    },
+    {
+      "id": "eks-api",
+      "type": "boundaryNode",
+      "position": {
+        "x": 324.0522205895131,
+        "y": 604.0318185333584
+      },
+      "style": {
+        "width": 261,
+        "height": 53
+      },
+      "data": {
+        "label": "API server",
+        "boundaryType": "auth",
+        "width": 261,
+        "height": 53,
+        "visualContainerId": "eks-control",
+        "eksComponent": "api-server",
+        "eksClusterName": "eks-architecture"
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 261,
+        "height": 53
+      },
+      "selected": false,
+      "width": 261,
+      "height": 53,
+      "resizing": false,
+      "dragging": false
+    },
+    {
+      "id": "eks-etcd",
+      "type": "boundaryNode",
+      "position": {
+        "x": 749.231941741551,
+        "y": 444.3674544008283
+      },
+      "style": {
+        "width": 289,
+        "height": 87
+      },
+      "data": {
+        "label": "etcd · cluster state",
+        "boundaryType": "auth",
+        "width": 289,
+        "height": 87,
+        "visualContainerId": "eks-control",
+        "eksComponent": "etcd",
+        "eksClusterName": "eks-architecture"
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 289,
+        "height": 87
+      },
+      "selected": false,
+      "dragging": false,
+      "width": 289,
+      "height": 87,
+      "resizing": false
+    },
+    {
+      "id": "eks-controllers",
+      "type": "boundaryNode",
+      "position": {
+        "x": 740.9172285542521,
+        "y": 554.6970676439184
+      },
+      "style": {
+        "width": 297,
+        "height": 64
+      },
+      "data": {
+        "label": "Controller components · reconcile desired state",
+        "boundaryType": "auth",
+        "width": 297,
+        "height": 64,
+        "visualContainerId": "eks-control",
+        "eksComponent": "controllers",
+        "eksClusterName": "eks-architecture"
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 297,
+        "height": 64
+      },
+      "selected": false,
+      "dragging": false,
+      "width": 297,
+      "height": 64,
+      "resizing": false
+    },
+    {
+      "id": "eks-scheduler",
+      "type": "boundaryNode",
+      "position": {
+        "x": 746.7639475856812,
+        "y": 659.0513349807355
+      },
+      "style": {
+        "width": 296,
+        "height": 62
+      },
+      "data": {
+        "label": "Scheduler · selects nodes, records bindings",
+        "boundaryType": "auth",
+        "width": 296,
+        "height": 62,
+        "visualContainerId": "eks-control",
+        "eksComponent": "scheduler",
+        "eksClusterName": "eks-architecture"
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 296,
+        "height": 62
+      },
+      "selected": false,
+      "dragging": false,
+      "width": 296,
+      "height": 62,
+      "resizing": false
+    },
+    {
+      "id": "eks-admin",
+      "type": "serviceNode",
+      "position": {
+        "x": 387.52888840289853,
+        "y": 20.71454818378743
+      },
+      "data": {
+        "serviceId": "user",
+        "label": "Developer / Administrator",
+        "category": "Client / Ingress",
+        "health": "healthy",
+        "subnet": "global",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "kubectl management actor; not an application client",
+        "customConfig": {},
+        "width": 140,
+        "height": 115
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "eks-cluster",
+      "type": "serviceNode",
+      "position": {
+        "x": 385.432422390979,
+        "y": 387.81343449186244
+      },
+      "data": {
+        "serviceId": "eks",
+        "label": "Kubernetes API server endpoint",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "global",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "Access address for kube-apiserver; public and private access options, not an independent management component",
+        "customConfig": {
+          "referenceOnly": true,
+          "eks": {
+            "kind": "control-plane",
+            "clusterName": "eks-architecture",
+            "controlPlaneAvailable": true
+          },
+          "endpointPublicAccess": true,
+          "endpointPrivateAccess": true,
+          "publicAccessCidrs": [
+            "203.0.113.10/32"
+          ],
+          "coverage": "Endpoint, IAM access entries and Kubernetes RBAC are annotations; API operations not simulated."
+        },
+        "visualContainerId": "eks-control",
+        "eksComponent": "api-endpoint",
+        "eksClusterName": "eks-architecture",
+        "width": 140,
+        "height": 115
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "eks-vpc",
+      "type": "boundaryNode",
+      "position": {
+        "x": 40,
+        "y": 930
+      },
+      "style": {
+        "width": 1390,
+        "height": 430
+      },
+      "data": {
+        "label": "Amazon VPC · customer data plane · 10.70.0.0/16",
+        "boundaryType": "vpc",
+        "width": 1390,
+        "height": 430,
+        "cidr": "10.70.0.0/16",
+        "visualContainerId": "eks-region"
+      },
+      "zIndex": -3,
+      "measured": {
+        "width": 1390,
+        "height": 430
+      },
+      "selected": false,
+      "width": 1390,
+      "height": 430,
+      "resizing": false
+    },
+    {
+      "id": "eks-subnet-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 87.47336044501992,
+        "y": 969.2471628030646
+      },
+      "style": {
+        "width": 633,
+        "height": 344
+      },
+      "data": {
+        "label": "Private subnet 1 · 10.70.1.0/24",
+        "boundaryType": "private_subnet",
+        "width": 633,
+        "height": 344,
+        "cidr": "10.70.0.0/17",
+        "visualContainerId": "eks-vpc",
+        "totalAddresses": 32768,
+        "usableHosts": 32763,
+        "reservedAddresses": [
+          {
+            "ip": "10.70.0.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.70.0.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.70.0.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.70.0.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.70.127.255",
+            "offset": 32767,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.70.0.4",
+          "end": "10.70.127.254"
+        }
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 633,
+        "height": 344
+      },
+      "selected": false,
+      "dragging": false,
+      "width": 633,
+      "height": 344,
+      "resizing": false
+    },
+    {
+      "id": "eks-subnet-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 750,
+        "y": 980
+      },
+      "style": {
+        "width": 640,
+        "height": 330
+      },
+      "data": {
+        "label": "Private subnet 2 · 10.70.2.0/24",
+        "boundaryType": "private_subnet",
+        "width": 640,
+        "height": 330,
+        "cidr": "10.70.128.0/17",
+        "visualContainerId": "eks-vpc",
+        "totalAddresses": 32768,
+        "usableHosts": 32763,
+        "reservedAddresses": [
+          {
+            "ip": "10.70.128.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.70.128.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.70.128.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.70.128.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.70.255.255",
+            "offset": 32767,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.70.128.4",
+          "end": "10.70.255.254"
+        }
+      },
+      "zIndex": -2,
+      "measured": {
+        "width": 640,
+        "height": 330
+      }
+    },
+    {
+      "id": "eks-worker-a",
+      "type": "serviceNode",
+      "position": {
+        "x": 330,
+        "y": 1035
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "Worker node 1",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "private",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "Kubelet watches assigned Pod state via API endpoint; runtime starts containers. API server contacts kubelet for logs / attach / port-forward.",
+        "customConfig": {
+          "instanceType": "t3.medium",
+          "referenceOnly": true,
+          "eksNode": {
+            "clusterName": "eks-architecture",
+            "observedPodCount": 2
+          },
+          "coverage": "Node loss does not reconcile or relocate workload snapshots automatically."
+        },
+        "visualContainerId": "eks-subnet-a",
+        "width": 140,
+        "height": 98
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false
+    },
+    {
+      "id": "eks-pod-a1",
+      "type": "boundaryNode",
+      "position": {
+        "x": 115,
+        "y": 1180
+      },
+      "style": {
+        "width": 270,
+        "height": 85
+      },
+      "data": {
+        "label": "Application pod 1 · Ready snapshot",
+        "boundaryType": "auth",
+        "width": 270,
+        "height": 85,
+        "visualContainerId": "eks-subnet-a"
+      },
+      "zIndex": -1,
+      "measured": {
+        "width": 270,
+        "height": 85
+      },
+      "selected": false
+    },
+    {
+      "id": "eks-pod-a2",
+      "type": "boundaryNode",
+      "position": {
+        "x": 415,
+        "y": 1180
+      },
+      "style": {
+        "width": 270,
+        "height": 85
+      },
+      "data": {
+        "label": "Application pod 2 · Ready snapshot",
+        "boundaryType": "auth",
+        "width": 270,
+        "height": 85,
+        "visualContainerId": "eks-subnet-a"
+      },
+      "zIndex": -1,
+      "measured": {
+        "width": 270,
+        "height": 85
+      }
+    },
+    {
+      "id": "eks-worker-b",
+      "type": "serviceNode",
+      "position": {
+        "x": 1010,
+        "y": 1035
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "Worker node 2",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "private",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "Kubelet watches assigned Pod state via API endpoint; runtime starts containers. API server contacts kubelet for logs / attach / port-forward.",
+        "customConfig": {
+          "instanceType": "t3.medium",
+          "referenceOnly": true,
+          "eksNode": {
+            "clusterName": "eks-architecture",
+            "observedPodCount": 1
+          },
+          "coverage": "Node loss does not reconcile or relocate workload snapshots automatically."
+        },
+        "visualContainerId": "eks-subnet-b",
+        "width": 140,
+        "height": 98
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      }
+    },
+    {
+      "id": "eks-pod-b1",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1084.0415249851012,
+        "y": 1186.2835114127197
+      },
+      "style": {
+        "width": 270,
+        "height": 85
+      },
+      "data": {
+        "label": "Application pod 3 · Ready snapshot",
+        "boundaryType": "auth",
+        "width": 270,
+        "height": 85,
+        "visualContainerId": "eks-subnet-b"
+      },
+      "zIndex": -1,
+      "measured": {
+        "width": 270,
+        "height": 85
+      },
+      "selected": false,
+      "dragging": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "eks-admin-eks-cluster",
+      "source": "eks-admin",
+      "target": "eks-cluster",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "kubectl · API management · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "bottom",
+      "targetHandle": "top"
+    },
+    {
+      "id": "eks-cluster-eks-api",
+      "source": "eks-cluster",
+      "target": "eks-api",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Endpoint address resolves access to kube-apiserver · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top"
+    },
+    {
+      "id": "eks-api-eks-etcd",
+      "source": "eks-api",
+      "target": "eks-etcd",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Read / write cluster state · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "source-right",
+      "targetHandle": "target-left"
+    },
+    {
+      "id": "eks-controllers-eks-api",
+      "source": "eks-controllers",
+      "target": "eks-api",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Controllers watch / update API objects · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "left",
+      "targetHandle": "right"
+    },
+    {
+      "id": "eks-scheduler-eks-api",
+      "source": "eks-scheduler",
+      "target": "eks-api",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Scheduler watches Pending pods / writes bindings · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "left",
+      "targetHandle": "bottom-right"
+    },
+    {
+      "id": "eks-worker-a-eks-api",
+      "source": "eks-worker-a",
+      "target": "eks-api",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Kubelet → API server: watch assigned pods / report status (via private endpoint) · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "lineStyle": "curved"
+      },
+      "sourceHandle": "right",
+      "targetHandle": "bottom"
+    },
+    {
+      "id": "eks-worker-a-eks-pod-a1",
+      "source": "eks-worker-a",
+      "target": "eks-pod-a1",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Container runtime hosts observed pod · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "selected": false,
+      "sourceHandle": "left",
+      "targetHandle": "top"
+    },
+    {
+      "id": "eks-worker-a-eks-pod-a2",
+      "source": "eks-worker-a",
+      "target": "eks-pod-a2",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Container runtime hosts observed pod · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "right",
+      "targetHandle": "top"
+    },
+    {
+      "id": "eks-worker-b-eks-api",
+      "source": "eks-worker-b",
+      "target": "eks-api",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Kubelet → API server: watch assigned pods / report status (via private endpoint) · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "lineStyle": "curved"
+      },
+      "sourceHandle": "left",
+      "targetHandle": "bottom"
+    },
+    {
+      "id": "eks-worker-b-eks-pod-b1",
+      "source": "eks-worker-b",
+      "target": "eks-pod-b1",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "Container runtime hosts observed pod · illustration only",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      },
+      "sourceHandle": "right",
+      "targetHandle": "top"
+    },
+    {
+      "id": "eks-api-eks-worker-a-kubelet-operations",
+      "source": "eks-api",
+      "target": "eks-worker-a",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "API server → kubelet: logs / attach / port-forward · illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "eks-api-eks-worker-b-kubelet-operations",
+      "source": "eks-api",
+      "target": "eks-worker-b",
+      "sourceHandle": "source-bottom",
+      "targetHandle": "target-top",
+      "type": "custom",
+      "data": {
+        "relationship": "manages",
+        "protocol": "HTTPS",
+        "label": "API server → kubelet: logs / attach / port-forward · illustration only",
+        "lineStyle": "curved",
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
+      }
+    }
+  ]
+}

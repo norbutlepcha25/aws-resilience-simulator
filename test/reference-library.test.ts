@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { REFERENCE_ARCHITECTURES } from '../src/data/referenceArchitectures.ts';
-import { parseReference, saveReference, readReferenceLibrary } from '../src/engine/persistence/references.ts';
+import { parseReference, saveReference, readReferenceLibrary, referenceSnapshot } from '../src/engine/persistence/references.ts';
 
 test('Each built-in reference has its own JSON source and loads without losing graph data', () => {
   const folder = new URL('../src/data/references/', import.meta.url);
@@ -26,4 +26,18 @@ test('Reference library roundtrip preserves configuration, boundaries and scenar
   assert.throws(() => parseReference(JSON.stringify({ ...ref, edges: [{ id: 'bad', source: 'missing', target: 'missing' }] })), /connection/);
   assert.equal(readReferenceLibrary(storage)[0].name, 'Renamed');
   assert.throws(() => parseReference(JSON.stringify({ format: 'aws-architecture-lab', state: {} })), /reference/);
+});
+
+test('Edited references can be saved when the request start node was removed', () => {
+  const ref = structuredClone(REFERENCE_ARCHITECTURES[0]);
+  ref.scenario = { id: 'edited', name: 'Edited request', method: 'GET', path: '/test', startNodeId: 'removed-node', trafficLevel: 'normal' };
+  const saved = referenceSnapshot(ref);
+  assert.equal(saved.scenario!.startNodeId, '');
+  assert.equal(saved.scenario!.path, '/test');
+  assert.equal(ref.scenario.startNodeId, 'removed-node');
+  assert.deepEqual(saved.nodes, ref.nodes);
+  assert.deepEqual(saved.edges, ref.edges);
+  assert.throws(() => parseReference(JSON.stringify(ref)), /request scenario/);
+  ref.scenario.startNodeId = ref.nodes[0].id;
+  assert.deepEqual(referenceSnapshot(ref).scenario, ref.scenario);
 });

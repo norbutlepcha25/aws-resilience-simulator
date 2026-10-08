@@ -1,4 +1,6 @@
+import { CompassHandles } from './CompassHandles.tsx';
 import React, { memo } from 'react';
+import { eksComponent } from '../../data/eksComponents.ts';
 import { NodeResizer } from '@xyflow/react';
 import {
   Flag,
@@ -249,6 +251,7 @@ export const BoundaryNode = memo((props: any) => {
         handleClassName="!h-3.5 !w-3.5 !bg-white dark:!bg-slate-900 !border-2 !border-circuit-600 !rounded-xs !shadow-lg hover:scale-125 transition-transform !z-50 pointer-events-auto cursor-pointer"
       />
       {renderBoundaryFrame()}
+      {((eksComponent(props as any) && eksComponent(props as any) !== 'control-plane') || (data.boundaryType === 'auth' && data.visualContainerId && !data.eksComponent)) && <CompassHandles />}
     </div>
   );
 });
